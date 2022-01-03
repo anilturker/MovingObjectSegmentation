@@ -11,6 +11,15 @@ class unet_vgg16(nn.Module):
         kernel_size (int): Size of the convolutional kernels
         skip (bool, default=True): Use skip connections
     """
+    @staticmethod
+    def weight_init(m):
+        if isinstance(m, nn.Conv2d):
+            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+            nn.init.constant_(m.bias.data, 0)
+        elif isinstance(m, nn.Linear):
+            nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
+            nn.init.constant_(m.bias.data, 0)
+
     def __init__(self, inp_ch, kernel_size=3, skip=True):
         super().__init__()
         self.skip = skip
@@ -24,6 +33,11 @@ class unet_vgg16(nn.Module):
         self.dec2 = UNetUp(256, skip*128, 128, 2, batch_norm=True, kernel_size=kernel_size)
         self.dec1 = UNetUp(128, skip*64, 64, 2, batch_norm=True, kernel_size=kernel_size)
         self.out = ConvSig(64)
+
+        self.frozenLayers = [self.enc1, self.enc2, self.enc3]
+
+        # Apply weight initialization
+        self.apply(self.weight_init)
 
     def forward(self, inp):
         """

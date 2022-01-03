@@ -30,6 +30,7 @@ def evalVideo(cat, vid, model, empty_bg=False, recent_bg=False, segmentation_ch=
     """
 
     transforms = [
+        [aug.Resize((240, 320))],
         [aug.ToTensor()],
         [aug.NormalizeTensor(mean_rgb=[0.485, 0.456, 0.406], std_rgb=[0.229, 0.224, 0.225],
                             mean_seg=[0.5], std_seg=[0.5], segmentation_ch=segmentation_ch)]
@@ -152,14 +153,15 @@ def logVideos(dataset, model, model_name, csv_path, empty_bg=False, recent_bg=Fa
         for vid in vids:
             print(vid)
             fnr, prec, f_score = evalVideo(cat, vid, model, empty_bg=empty_bg, recent_bg=recent_bg,
-                                           segmentation_ch=segmentation_ch, eps=eps, save_vid=save_vid, 
+                                           segmentation_ch=segmentation_ch, eps=eps, save_vid=save_vid,
                                            save_outputs=save_outputs, model_name=model_name, debug=debug)
 
             new_row[csv_header2loc[vid]] = fnr
             new_row[csv_header2loc[vid]+1] = prec
             new_row[csv_header2loc[vid]+2] = f_score
 
-    with open(csv_path, mode='a') as log_file:
+
+    with open(csv_path, mode='a', newline="") as log_file:
         employee_writer = csv.writer(log_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         employee_writer.writerow(new_row)
 

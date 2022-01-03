@@ -116,5 +116,5 @@ datasets_test = {
         'turbulence':['turbulence3']
         },
     5: {'baseline':['highway'],
-        },
+        }, # small dataset for quick debugging
 }

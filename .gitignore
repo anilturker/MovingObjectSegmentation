@@ -1,6 +1,8 @@
 __pycache__
 tb_runs
 .vscode
+.idea
+.ipynb_checkpoints
 *.zip
 currentFr
 currentFrFpm
