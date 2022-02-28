@@ -10,7 +10,7 @@ from utils import augmentations as aug
 from utils.data_loader import CDNet2014Loader
 from utils import losses
 from models.unet import unet_vgg16
-from utils.eval_utils import logVideos
+from models.unet_attention import AttU_Net
 from tensorboardX import SummaryWriter
 import torchvision.models as models
 import time
@@ -27,11 +27,12 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='BSUV-Net-2.0 pyTorch')
     parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unetvgg16',
-                        help='Which network to use')
+                        help='Which network to use. unetvgg16 or unet_attention')
 
     # Input images
     parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
-                        help='Size of the inputs. If equals 0, use the original sized images. Assumes square sized input')
+                        help='Size of the inputs. If equals 0, use the original sized images. '
+                             'Assumes square sized input')
     parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='manual',
                         help='Which empty background to use? no, manual or automatic')
     parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=1,
@@ -59,8 +60,8 @@ if __name__ == '__main__':
     parser.add_argument('--aug_rsc', metavar='Data Augmentation for randomly-shifted crop', dest='aug_rsc', type=int,
                         default=1,
                         help='Whether to use randomly-shifted crop. 0 or 1')
-    parser.add_argument('--aug_ptz', metavar='Data Augmentation for PTZ camera crop', dest='aug_ptz', type=int, default=1,
-                        help='Whether to use PTZ camera crop 0 or 1')
+    parser.add_argument('--aug_ptz', metavar='Data Augmentation for PTZ camera crop', dest='aug_ptz', type=int,
+                        default=1, help='Whether to use PTZ camera crop 0 or 1')
     parser.add_argument('--aug_id', metavar='Data Augmentation for Illumination Difference', dest='aug_id', type=int,
                         default=1,
                         help='Whether to use Data Augmentation for Illumination Difference. 0 or 1')
@@ -78,7 +79,8 @@ if __name__ == '__main__':
 
     # Model name
     parser.add_argument('--model_name', metavar='Name of the model for log keeping', dest='model_name',
-                        type=str, default='BSUV-Net 2.0', help='Name of the model to be used in output csv and checkpoints')
+                        type=str, default='BSUV-Net 2.0',
+                        help='Name of the model to be used in output csv and checkpoints')
 
     args = parser.parse_args()
     network = args.network
@@ -116,13 +118,13 @@ if __name__ == '__main__':
 
     # naming for log keeping
     if model_chk:
-        fname = model_chk
+        fname = model_chk + "_" + network
     else:
-        fname = args.model_name
+        fname = args.model_name + "_network_" + network
 
     print(f"Model started: {fname}")
 
-    # Intialize Tensorboard
+    # Initialize Tensorboard
     writer = SummaryWriter(f"tb_runs/{fname}")
     print("Initialized TB")
 
@@ -228,6 +230,8 @@ if __name__ == '__main__':
 
     if network == "unetvgg16":
         model = unet_vgg16(inp_ch=num_ch, skip=1)
+    elif network == "unet_attention":
+        model = AttU_Net(inp_ch=num_ch)
     else:
         raise ValueError(f"network = {network} is not defined")
 
@@ -252,14 +256,15 @@ if __name__ == '__main__':
     for param_tensor in model.state_dict():
         print_debug(param_tensor + "\t" + str(model.state_dict()[param_tensor].size()))
 
+    # Load VGG-16 weights
+    """
+    vgg16_weights = models.vgg16_bn(pretrained=True)
+    
     # Freeze layers
     for layer in model.frozenLayers:
         for param in layer.parameters():
             param.requires_grad = False
 
-    # Load VGG-16 weights
-    """
-    vgg16_weights = models.vgg16_bn(pretrained=True)
     mapped_weights = {}
     for layer_count, (k_vgg, k_segnet) in enumerate(zip(vgg16_weights.state_dict().keys(), model.state_dict().keys())):
         # Last layer of VGG16 is not used in encoder part of the model
@@ -352,8 +357,10 @@ if __name__ == '__main__':
             writer.add_scalar(f"{phase}/f", epoch_f, epoch)
 
             if phase.startswith("Test"):
-                best_f = epoch_f
-                torch.save(model, f"{mdl_dir}/model_best.mdl")
+                if epoch_f > best_f:
+                    print("The model weights that gives best f1 score on the test data are saving")
+                    best_f = epoch_f
+                    torch.save(model, f"{mdl_dir}/model_best.mdl")
 
             # Save the checkpoint
             checkpoint = {
@@ -370,5 +377,9 @@ if __name__ == '__main__':
 
     # save the last model
     torch.save(model, f"{mdl_dir}/model_last.mdl")
+
+    writer.add_hparams({'lr': lr, 'bsize': batch_size, 'epoch_size' : num_epochs,
+                       'optimizer': opt, 'loss_fn': args.loss},
+                       {'epoch_loss': epoch_loss, 'epoch_acc':epoch_acc, 'epoch_f':epoch_f})
 
     print('Finished Training')

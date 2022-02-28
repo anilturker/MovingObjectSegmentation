@@ -61,8 +61,8 @@ datasets_tr = {
         'thermal':['corridor', 'diningRoom', 'lakeSide', 'library'],
         'turbulence':['turbulence0', 'turbulence1', 'turbulence2']
         }, # CV fold 4
-    5: {'baseline':['pedestrians', 'office', 'PETS2006'],
-        'intermittentObjectMotion':['abandonedBox'],
+    5: {
+        'intermittentObjectMotion':['streetLight']
         }, # small dataset for quick debugging
 }
 
@@ -115,6 +115,7 @@ datasets_test = {
         'thermal':['park'],
         'turbulence':['turbulence3']
         },
-    5: {'baseline':['highway'],
+    5: {
+        'intermittentObjectMotion':['streetLight']
         }, # small dataset for quick debugging
 }

@@ -123,6 +123,9 @@ def evalVideo(cat, vid, model, empty_bg=False, recent_bg=False, segmentation_ch=
     prec = tp / (tp + fp) if tp + fp > 0 else float('nan')
     recall = tp / (tp + fn) if tp + fn > 0 else float('nan')
     f_score = 2 * (prec * recall) / (prec + recall) if prec + recall > 0 else float('nan')
+
+    print(" %s : %s\t -> prec : %f\trecall : %f\tf_score : %f\t" %(cat, vid, prec, recall, f_score))
+
     if save_vid:
         vid.release()
 
