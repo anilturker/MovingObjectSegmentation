@@ -13,14 +13,15 @@ from utils.eval_utils import logVideos
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='BSUV-Net-2.0 pyTorch')
-    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='original',
-                        help='Which network to use. original, unetvgg16 or unet_attention')
+    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unet_no_empty_attention_flux',
+                        help='Which network to use. unetvgg16, unet_attention, unet_attention_flux,'
+                             'original, unet_no_empty_attention, unet_no_empty_attention_flux')
 
     # Input images
     parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
                         help='Size of the inputs. If equals 0, use the original sized images. '
                              'Assumes square sized input')
-    parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='manual',
+    parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='no',
                         help='Which empty background to use? no, manual or automatic')
     parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=1,
                         help='Use recent background frame as an input as well. 0 or 1')
@@ -60,7 +61,7 @@ if __name__ == '__main__':
     # Cross-validation
     # You can select more than one train-test split, specify the id's of them
     parser.add_argument('--set_number', metavar='Which training-test split to use from config file', dest='set_number',
-                        type=int, default=[1, 2, 3, 4], help='Training and test videos will be selected based on the set number')
+                        type=int, default=[5], help='Training and test videos will be selected based on the set number')
 
     # Model name
     parser.add_argument('--model_name', metavar='Name of the model for log keeping', dest='model_name',
@@ -84,6 +85,8 @@ if __name__ == '__main__':
     else:
         inp_size = (inp_size, inp_size)
 
+    use_flux_tensor = False
+
     aug_noise = args.aug_noise
     aug_rsc = args.aug_rsc
     aug_ptz = args.aug_ptz
@@ -97,6 +100,9 @@ if __name__ == '__main__':
 
     save_dir = data_config.save_dir
     mdl_dir = os.path.join(save_dir, fname)
+
+    if network == "unet_attention_flux" or network == "unet_no_empty_attention_flux":
+        use_flux_tensor = True
 
     # Evaluation on test videos
     model = torch.load(f"{mdl_dir}/model_best.mdl").cuda()
@@ -143,6 +149,7 @@ if __name__ == '__main__':
             fname,
             csv_path,
             empty_bg=empty_bg,
+            use_flux_tensor=use_flux_tensor,
             recent_bg=recent_bg,
             segmentation_ch=seg_ch,
             save_vid=0,

@@ -10,7 +10,7 @@ from utils import augmentations as aug
 from utils.data_loader import CDNet2014Loader
 from utils import losses
 from models.unet import unet_vgg16
-from models.unet_attention import AttU_Net
+from models.unet_attention import AttU_Net, AttU_AvFeat_Net
 from tensorboardX import SummaryWriter
 import torchvision.models as models
 import time
@@ -26,28 +26,33 @@ def print_debug(s):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='BSUV-Net-2.0 pyTorch')
-    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unetvgg16',
-                        help='Which network to use. unetvgg16 or unet_attention')
+    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unet_temporal_network',
+                        help='Which network to use. unetvgg16, unet_attention, unet_attention_flux,'
+                             'unet_no_empty_attention, unet_no_empty_attention_flux, unet_temporal_network')
 
     # Input images
     parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
                         help='Size of the inputs. If equals 0, use the original sized images. '
                              'Assumes square sized input')
-    parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='manual',
+    parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='no',
                         help='Which empty background to use? no, manual or automatic')
-    parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=1,
+    parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=0,
                         help='Use recent background frame as an input as well. 0 or 1')
     parser.add_argument('--seg_ch', metavar='Segmentation', dest='seg_ch', type=int, default=1,
                         help='Whether to use the FPM channel input or not. 0 or 1')
+    parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=1,
+                        help='Whether to use the current frame or not. 0 or 1')
 
     # Optimization
     parser.add_argument('--lr', metavar='Learning Rate', dest='lr', type=float, default=1e-4,
                         help='learning rate of the optimization')
-    parser.add_argument('--weight_decay', metavar='weight_decay', dest='weight_decay', type=float, default=1e-2,
+    parser.add_argument('--'
+                        ''
+                        ',', metavar='weight_decay', dest='weight_decay', type=float, default=1e-2,
                         help='weight decay of the optimization')
-    parser.add_argument('--num_epochs', metavar='Number of epochs', dest='num_epochs', type=int, default=30,
+    parser.add_argument('--num_epochs', metavar='Number of epochs', dest='num_epochs', type=int, default=50,
                         help='Maximum number of epochs')
-    parser.add_argument('--batch_size', metavar='Minibatch size', dest='batch_size', type=int, default=4,
+    parser.add_argument('--batch_size', metavar='Minibatch size', dest='batch_size', type=int, default=1,
                         help='Number of samples per minibatch')
     parser.add_argument('--loss', metavar='Loss function to be used', dest='loss', type=str, default='jaccard',
                         help='Loss function to be used ce for cross-entropy or jaccard for Jaccard index')
@@ -70,8 +75,8 @@ if __name__ == '__main__':
                         help='Probability of applying Intermittent Object Addition')
 
     # Checkpoint
-    parser.add_argument('--model_chk', metavar='Checkpoint for the model', dest='model_chk', type=str, default='',
-                        help='Date of the checkpoint model if there exist any')
+    parser.add_argument('--model_chk', metavar='Checkpoint for the model', dest='model_chk', type=int, default=1,
+                        help='Whether to use checkpoint, 0 or 1')
 
     # Cross-validation
     parser.add_argument('--set_number', metavar='Which training-test split to use from config file', dest='set_number',
@@ -85,6 +90,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     network = args.network
     empty_bg = args.empty_bg
+    current_fr = args.current_fr
     recent_bg = True if args.recent_bg == 1 else False
     seg_ch = True if args.seg_ch == 1 else False
     lr = args.lr
@@ -98,6 +104,11 @@ if __name__ == '__main__':
         inp_size = None
     else:
         inp_size = (inp_size, inp_size)
+
+    use_flux_tensor = False
+    use_temporal_network = False
+    temporal_length = 50
+    temporal_kernel_size = 8
 
     aug_noise = args.aug_noise
     aug_rsc = args.aug_rsc
@@ -117,10 +128,13 @@ if __name__ == '__main__':
     save_dir = data_config.save_dir
 
     # naming for log keeping
-    if model_chk:
-        fname = model_chk + "_" + network
-    else:
-        fname = args.model_name + "_network_" + network
+    fname = args.model_name + "_network_" + network
+
+    if network == "unet_attention_flux" or network == "unet_no_empty_attention_flux":
+        use_flux_tensor = True
+
+    if network == "unet_temporal_network":
+        use_temporal_network = True
 
     print(f"Model started: {fname}")
 
@@ -174,6 +188,9 @@ if __name__ == '__main__':
         dataloader_mask = CDNet2014Loader(
             iom_dataset,
             empty_bg=empty_bg,
+            use_flux_tensor=use_flux_tensor,
+            use_temporal_network=False,
+            temporal_length=temporal_length,
             recent_bg=recent_bg,
             segmentation_ch=seg_ch,
             transforms=mask_transforms,
@@ -197,41 +214,49 @@ if __name__ == '__main__':
         *additional_augs,
         [aug.ToTensor()],
         [aug.NormalizeTensor(mean_rgb=mean_rgb, std_rgb=std_rgb,
-                             mean_seg=mean_seg, std_seg=std_seg, segmentation_ch=seg_ch)]
+                             mean_seg=mean_seg, std_seg=std_seg, segmentation_ch=seg_ch,
+                             recent_bg=recent_bg, empty_bg=(empty_bg != "no"), current_fr=current_fr)]
     ]
 
     transforms_test = [
         [aug.CenterCrop(inp_size)],
         [aug.ToTensor()],
         [aug.NormalizeTensor(mean_rgb=mean_rgb, std_rgb=std_rgb,
-                             mean_seg=mean_seg, std_seg=std_seg, segmentation_ch=seg_ch)]
+                             mean_seg=mean_seg, std_seg=std_seg, segmentation_ch=seg_ch,
+                             recent_bg=recent_bg, empty_bg=(empty_bg != "no"), current_fr=current_fr)]
     ]
 
     dataloader_tr = CDNet2014Loader(
-        dataset_tr, empty_bg=empty_bg, recent_bg=recent_bg,
-        segmentation_ch=seg_ch, transforms=transforms_tr,
+        dataset_tr, empty_bg=empty_bg, use_flux_tensor=use_flux_tensor, recent_bg=recent_bg,
+        use_temporal_network=use_temporal_network, temporal_length=temporal_length, use_selected=200,
+        segmentation_ch=seg_ch, transforms=transforms_tr, shuffle=True
     )
     dataloader_test = CDNet2014Loader(
-        dataset_test, empty_bg=empty_bg, recent_bg=recent_bg,
-        segmentation_ch=seg_ch, transforms=transforms_test,
+        dataset_test, empty_bg=empty_bg, use_flux_tensor=use_flux_tensor, recent_bg=recent_bg,
+        use_temporal_network=use_temporal_network, temporal_length=temporal_length, use_selected=200,
+        segmentation_ch=seg_ch, transforms=transforms_test, shuffle=True
     )
 
     tensorloader_tr = torch.utils.data.DataLoader(
         dataset=dataloader_tr, batch_size=batch_size, shuffle=True, num_workers=1
     )
     tensorloader_test = torch.utils.data.DataLoader(
-        dataset=dataloader_test, batch_size=batch_size, shuffle=False, num_workers=1
+        dataset=dataloader_test, batch_size=batch_size, shuffle=True, num_workers=1
     )
 
     # load model
     num_ch_per_inp = (3 + (1 * seg_ch))
     num_inp = ((1 * (empty_bg != "no")) + (1 * recent_bg) + 1)
-    num_ch = num_inp * num_ch_per_inp
+    num_ch = num_inp * num_ch_per_inp + 1 * (use_flux_tensor == True)
 
     if network == "unetvgg16":
         model = unet_vgg16(inp_ch=num_ch, skip=1)
-    elif network == "unet_attention":
+    elif network == "unet_attention" or network == "unet_attention_flux" \
+        or network == "unet_no_empty_attention" or network == "unet_no_empty_attention_flux":
         model = AttU_Net(inp_ch=num_ch)
+    elif network == "unet_temporal_network_attention":
+        model = AttU_AvFeat_Net(inp_ch=num_ch + temporal_kernel_size, temporal_length=temporal_length,
+                                filter_size=temporal_kernel_size)
     else:
         raise ValueError(f"network = {network} is not defined")
 
@@ -314,7 +339,10 @@ if __name__ == '__main__':
 
                 if phase == "Train":
                     # get the inputs; data is a list of [inputs, labels]
-                    inputs, labels = data[0].float(), data[1].float()
+                    if use_temporal_network:
+                        inputs, labels = torch.cat((data[0], data[1]), dim=1), data[2].float()
+                    else:
+                        inputs, labels = data[0].float(), data[1].float()
                     if cuda:
                         inputs, labels = inputs.cuda(), labels.cuda()
                     outputs = model(inputs)
@@ -326,7 +354,10 @@ if __name__ == '__main__':
                 else:
                     with torch.no_grad():
                         # get the inputs; data is a list of [inputs, labels]
-                        inputs, labels = data[0].float(), data[1].float()
+                        if use_temporal_network:
+                            inputs, labels = torch.cat((data[0], data[1]), dim=1), data[2].float()
+                        else:
+                            inputs, labels = data[0].float(), data[1].float()
                         if cuda:
                             inputs, labels = inputs.cuda(), labels.cuda()
                         outputs = model(inputs)
@@ -339,7 +370,7 @@ if __name__ == '__main__':
                 running_f += losses.f_score(labels_1d, outputs_1d).item()
 
                 del inputs, labels, outputs, labels_1d, outputs_1d
-                if (i + 1) % 2000 == 0:  # print every 2000 mini-batches
+                if (i + 1) % 100 == 0:  # print every 2000 mini-batches
                     print("::%s::[%d, %5d] loss: %.1f, acc: %.3f, f_score: %.3f" %
                           (phase, epoch + 1, i + 1,
                            running_loss / (i + 1), running_acc / (i + 1), running_f / (i + 1)))

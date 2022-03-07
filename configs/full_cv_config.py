@@ -62,6 +62,7 @@ datasets_tr = {
         'turbulence':['turbulence0', 'turbulence1', 'turbulence2']
         }, # CV fold 4
     5: {
+        'lowFramerate':['port_0_17fps'],
         'intermittentObjectMotion':['streetLight']
         }, # small dataset for quick debugging
 }
@@ -116,6 +117,6 @@ datasets_test = {
         'turbulence':['turbulence3']
         },
     5: {
-        'intermittentObjectMotion':['streetLight']
+         'lowFramerate':['tramCrossroad_1fps']
         }, # small dataset for quick debugging
 }

@@ -15,8 +15,8 @@ class CDNet2014Loader(data.Dataset):
                                                 as keys and list of background frame ids as values
     """
 
-    def __init__(self, dataset, empty_bg="no", empty_win_len=0, recent_bg=False, segmentation_ch=False,
-                 use_selected=200, transforms=None, multiplier=16, shuffle=False):
+    def __init__(self, dataset, empty_bg="no", use_flux_tensor=False, empty_win_len=0, recent_bg=False, segmentation_ch=False,
+                 use_temporal_network=False, temporal_length = 50, use_selected=None, transforms=None, multiplier=16, shuffle=False):
         """Initialization of data loader
         Args:
             :dataset (dict):                Dictionary of dataset. Keys are the categories (string),
@@ -24,11 +24,14 @@ class CDNet2014Loader(data.Dataset):
             :empty_bg (str):                'no': no empty background
                                             'manual': manually created empty background
                                             'automatic' : median of first k frames as empty background
+            :use_flux_tensor                'False' or 'True'
             :empty_win_length (int):        Number of initial frames for the median operation fro creating an empty
                                             background. Only used when empty_bg='automatic'.
                                             0 means median of all of the frames in the video
             :recent_bg (boolean):           Boolean for using the recent background frame
             :segmentation_ch (boolean):     Boolean for using the segmentation maps
+            :use_temporal_network(boolean): Boolean for using temporal network(AvFeat)
+            :temporal_length(int):          Number of frames for temporal network(AvFeat)
             :use_selected (int):            Number of selected frames to be used (None or 200)
             :transforms (torchvision.transforms):   Transforms to be applied to each input
             :multiplier (int):              Clip the outputs to be a multiple of multiplier. If 0 -> no clipping
@@ -51,32 +54,45 @@ class CDNet2014Loader(data.Dataset):
         input_tuples = []
         for cat, vid_arr in dataset.items():
             for vid in vid_arr:
+
+                # Read temporal roi file
+                roi_path = data_config.temp_roi_path.format(cat=cat, vid=vid)
+                with open(roi_path) as f:
+                    reader = csv.reader(f)
+                    temp_roi = list(reader)
+                temp_roi = list(map(int, temp_roi[0][0].split()))
+
                 # Find out the required frame ids (either selected or all the ones that have gt)
                 if use_selected == -1:
-                    last_fr = int(sorted(glob.glob(os.path.join(data_config.current_fr_dir.format(cat=cat, vid=vid), "*.jpg")))[-1][-10:-4])
+                    last_fr = int(sorted(glob.glob(os.path.join(data_config.current_fr_dir.format(cat=cat, vid=vid),
+                                                                "*.jpg")))[-1][-10:-4])
                     fr_ids = [idx for idx in range(1, last_fr+1)]
                 elif use_selected:
                     fr_ids = catvid_to_selected_frs[f"{cat}/{vid}"]
                 else:
-                    roi_path = data_config.temp_roi_path.format(cat=cat, vid=vid)
-                    with open(roi_path) as f:
-                        reader = csv.reader(f)
-                        temp_roi = list(reader)
-                    temp_roi = list(map(int, temp_roi[0][0].split()))
                     fr_ids = [idx for idx in range(temp_roi[0], temp_roi[1]+1)]
 
+                if use_temporal_network:
+                    first_proper_id = temp_roi[0] + temporal_length - 1
+                    for fr_id in fr_ids:
+                        if first_proper_id > fr_id:
+                            fr_ids.remove(fr_id)
+
                 for fr_id in fr_ids:
-                    input_tuples.append((cat, vid, fr_id))
+                        input_tuples.append((cat, vid, fr_id))
 
         self.input_tuples = input_tuples
         self.n_data = len(input_tuples)
         self.empty_bg = empty_bg
+        self.use_flux_tensor = use_flux_tensor
         self.empty_win_len = empty_win_len
         self.recent_bg = recent_bg
         self.segmentation_ch = segmentation_ch
         self.transforms = transforms
         self.multiplier = multiplier
         self.shuffle = shuffle
+        self.use_temporal_network = use_temporal_network
+        self.temporal_length = temporal_length
 
     def __getitem__(self, item):
         if self.shuffle:
@@ -85,7 +101,6 @@ class CDNet2014Loader(data.Dataset):
             cat, vid, fr_id = self.input_tuples[item]
 
         # Construct the input
-
         inp = {"empty_bg_seg":None, "empty_bg":None,
                "recent_bg_seg":None, "recent_bg":None,
                "current_fr_seg":None, "current_fr":None}
@@ -96,14 +111,10 @@ class CDNet2014Loader(data.Dataset):
             empty_bg_fpm_path = data_config.empty_bg_fpm_path.format(
                 cat=cat, vid=vid, fr_id=str(fr_id).zfill(6))
             if not os.path.exists(empty_bg_path):
-                empty_bg_id = random.choice(
-                    os.listdir(
-                        data_config.empty_bg_root.format(cat=cat, vid=vid)
-                    ))[-10:-4] 
                 empty_bg_path = data_config.empty_bg_path.format(
-                    cat=cat, vid=vid, fr_id=empty_bg_id)
+                    cat=cat, vid=vid, fr_id=str(fr_id).zfill(6))
                 empty_bg_fpm_path = data_config.empty_bg_fpm_path.format(
-                    cat=cat, vid=vid, fr_id=empty_bg_id)
+                    cat=cat, vid=vid, fr_id=str(fr_id).zfill(6))
             if not os.path.exists(empty_bg_path):
                 raise(f"No empty BG found for {cat}/{vid}")
 
@@ -129,16 +140,26 @@ class CDNet2014Loader(data.Dataset):
         inp["current_fr"] = self.__readRGB(data_config.current_fr_path\
                                 .format(cat=cat, vid=vid, fr_id=str(fr_id).zfill(6)))
 
-        label = self.__readGray(data_config.gt_path\
+        label = self.__readGray(data_config.gt_path \
                                 .format(cat=cat, vid=vid, fr_id=str(fr_id).zfill(6)))
-        
 
+        if self.use_flux_tensor:
+            inp["flux_tensor"] = self.__readGray(data_config.flux_tensor_path\
+                                                 .format(cat=cat, vid=vid, fr_id=str(fr_id).zfill(6)))
+
+        if self.use_temporal_network:
+            for i, id in enumerate(range(fr_id-self.temporal_length+1, fr_id+1)):
+                temporal_frame = self.__readGray(data_config.current_fr_path\
+                                .format(cat=cat, vid=vid, fr_id=str(id).zfill(6)))
+
+                inp["temporal_patch_" + str(i)] = temporal_frame
+
+        # Apply transform and clipping
         for transform_arr in self.transforms:
             if len(transform_arr) > 0:
                 inp, label = self.__selectrandom(transform_arr)(inp, label)
 
-
-        if(self.multiplier > 0):
+        if self.multiplier > 0:
             c, h, w = label.shape
             h_valid = int(h/self.multiplier)*self.multiplier
             w_valid = int(w/self.multiplier)*self.multiplier
@@ -149,7 +170,12 @@ class CDNet2014Loader(data.Dataset):
         label[np.abs(label-0.5) < 0.45] = -1
         label[label >= 0.95] = 1 # FG
 
-        return inp, label
+        if self.use_temporal_network:
+            temporal_patch_first_index = inp.shape[0] - self.temporal_length
+            temp_patch_inp = inp[temporal_patch_first_index:]
+            return inp[:temporal_patch_first_index], temp_patch_inp, label
+        else:
+            return inp, label
 
     def __len__(self):
         return self.n_data
@@ -167,3 +193,4 @@ class CDNet2014Loader(data.Dataset):
         while isinstance(choice, list):
             choice = random.choice(choice)
         return choice
+

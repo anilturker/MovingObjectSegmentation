@@ -31,6 +31,8 @@ from utils.data_loader import CDNet2014Loader
 only_rgb_inputs = ["empty_bg", "recent_bg",  "current_fr"]
 only_seg_inputs = ["empty_bg_seg", "recent_bg_seg",  "current_fr_seg"]
 
+only_aug_inputs = only_rgb_inputs + only_seg_inputs
+
 class AdditiveRandomIllumation:
     """Applies additive random illumination change to all frames and also increases
     illumination difference between the empty background and the current frame.
@@ -222,15 +224,16 @@ class RandomJitteredCrop:
             recent_bg_offset = [0, 0]
 
         for inp_type, im in cd_inp.items():
-            if inp_type.startswith("empty_bg"):
-                i_, j_ = i + empty_bg_offset[0], j + empty_bg_offset[1]
-            elif inp_type.startswith("recent_bg"):
-                i_, j_ = i + recent_bg_offset[0], j + recent_bg_offset[1]
-            else:
-                i_, j_ = i, j
             if im is not None:
-                cd_inp[inp_type] = im[i_:i_+self.out_dim[1], j_:j_+self.out_dim[0], :]
-                del im
+                if inp_type.startswith("empty_bg"):
+                    i_, j_ = i + empty_bg_offset[0], j + empty_bg_offset[1]
+                elif inp_type.startswith("recent_bg"):
+                    i_, j_ = i + recent_bg_offset[0], j + recent_bg_offset[1]
+                else:
+                    i_, j_ = i, j
+                if im is not None:
+                    cd_inp[inp_type] = im[i_:i_+self.out_dim[1], j_:j_+self.out_dim[0], :]
+                    del im
 
         cd_out = cd_out[i:i+self.out_dim[1], j:j+self.out_dim[0], :]
         return cd_inp, cd_out
@@ -325,7 +328,6 @@ class RandomPanCrop:
             print("Left  Pan") if left_pan else print("Right Pan")
 
         for inp_type, im in cd_inp.items():
-
             if im is not None:
                 if inp_type.startswith("empty_bg"):
                     panned_indices = [int(j + pixel_shift*k) for k in range(self.num_frames_empty)]
@@ -364,18 +366,20 @@ class RandomMask:
                 print("Applying Random Masking")
             sent_to_bg = np.random.randint(2)
             mask_inp, mask_label = next(iter(self.dataloader_mask))
-            for inp_type, im in cd_inp.items():
-                if (not inp_type.startswith('empty_bg')) and (im is not None):
-                    masked_im = im.copy()
-                    if sent_to_bg:
-                        mask = mask_label[:, :, 0]
-                        mask[cd_out[:, :, 0] == 1] = 0
-                    else:
-                        mask = mask_label[:, :, 0]
-                    for k in range(masked_im.shape[-1]):
-                        masked_im[:, :, k][mask == 1] = mask_inp[inp_type][:, :, k][mask == 1]
-                    cd_inp[inp_type] = masked_im
-                    del im
+            for inp_type in only_aug_inputs:
+                im = cd_inp[inp_type]
+                if im is not None:
+                    if (not inp_type.startswith('empty_bg')) and (im is not None):
+                        masked_im = im.copy()
+                        if sent_to_bg:
+                            mask = mask_label[:, :, 0]
+                            mask[cd_out[:, :, 0] == 1] = 0
+                        else:
+                            mask = mask_label[:, :, 0]
+                        for k in range(masked_im.shape[-1]):
+                            masked_im[:, :, k][mask == 1] = mask_inp[inp_type][:, :, k][mask == 1]
+                        cd_inp[inp_type] = masked_im
+                        del im
             cd_out[mask_label == 1] = 1
             
         return cd_inp, cd_out
@@ -419,12 +423,16 @@ class NormalizeTensor:
         std_seg ([_]): Standard deviation for segmentation channel
         segmentation_ch(bool): Bool for the usage of segmentation channel
     """
-    def __init__(self, mean_rgb, mean_seg, std_rgb, std_seg, segmentation_ch=False):
+    def __init__(self, mean_rgb, mean_seg, std_rgb, std_seg, segmentation_ch=False,
+                 recent_bg=False, empty_bg=False, current_fr=False):
         self.mean_rgb = mean_rgb
         self.std_rgb = std_rgb
         self.mean_seg = mean_seg
         self.std_seg = std_seg
         self.segmentation_ch = segmentation_ch
+        self.recent_bg = recent_bg
+        self.empty_bg = empty_bg
+        self.current_fr = current_fr
 
     def __call__(self, inp, out):
         """
@@ -443,13 +451,19 @@ class NormalizeTensor:
             mean_period = np.concatenate((self.mean_seg, mean_period))
             std_period = np.concatenate((self.std_seg, std_period))
 
-        c, h, w = inp.size()
-        num_frames = int(c / (3+(1*self.segmentation_ch)))
+        c, h, w = inp.shape
 
-        mean_vec = np.concatenate([mean_period for _ in range(num_frames)])
-        std_vec = np.concatenate([std_period for _ in range(num_frames)])
-        inp_n = tvtf.Normalize(mean_vec, std_vec)(inp)
-        return inp_n, out
+        normalized_frame = int(1*self.empty_bg + 1*self.recent_bg + 1*self.current_fr)
+        normalized_channel_size = normalized_frame * (3 + 1*self.segmentation_ch)
+
+        mean_vec = np.concatenate([mean_period for _ in range(normalized_frame)])
+        std_vec = np.concatenate([std_period for _ in range(normalized_frame)])
+
+        inp_n = tvtf.Normalize(mean_vec, std_vec)(inp[:normalized_channel_size])
+        if c > normalized_channel_size:
+            inp_res = torch.cat((inp_n, inp[normalized_channel_size:]), dim=0)
+
+        return inp_res, out
 
 def _centerCrop(im, w_, h_):
     """

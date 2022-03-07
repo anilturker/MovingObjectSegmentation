@@ -17,6 +17,8 @@ current_fr_fpm_path = f"{root_dir}/currentFrFpm/{{cat}}/{{vid}}/fpm{{fr_id}}.jpg
 empty_bg_fpm_path = f"{root_dir}/emptyBgFpm/{{cat}}/{{vid}}/fpm{{fr_id}}.jpg"
 recent_bg_fpm_path = f"{root_dir}/recentBgFpm/{{cat}}/{{vid}}/fpm{{fr_id}}.jpg"
 
+flux_tensor_path = f"{root_dir}/fluxTensor/{{cat}}/{{vid}}/flux_tensor{{fr_id}}.jpg"
+
 # Directory for the selected background frames
 selected_frs_200_csv = f"{root_dir}/CDNET2014_selected_frames_200.csv"
 

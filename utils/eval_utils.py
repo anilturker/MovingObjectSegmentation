@@ -12,7 +12,8 @@ import numpy as np
 # Locations of each video in the CSV file
 csv_header2loc = data_config.csv_header2loc
 
-def evalVideo(cat, vid, model, empty_bg=False, recent_bg=False, segmentation_ch=False, eps=1e-5, 
+
+def evalVideo(cat, vid, model, empty_bg=False, use_flux_tensor=False, recent_bg=False, segmentation_ch=False, eps=1e-5,
               save_vid=False, save_outputs="", model_name="", debug=False, use_selected=False, multiplier=16):
     """ Evalautes the trained model on all ROI frames of cat/vid
     Args:
@@ -20,6 +21,7 @@ def evalVideo(cat, vid, model, empty_bg=False, recent_bg=False, segmentation_ch=
         :video (string):                Video
         :model (torch model):           Trained PyTorch model
         :empty_bg (boolean):            Boolean for using the empty background frame
+        :use_flux_tensor                'False' or 'True'
         :recent_bg (boolean):           Boolean for using the recent background frame
         :segmentation_ch (boolean):     Boolean for using the segmentation maps
         :eps (float):                   A small multiplier for making the operations easier
@@ -33,11 +35,13 @@ def evalVideo(cat, vid, model, empty_bg=False, recent_bg=False, segmentation_ch=
         [aug.Resize((240, 320))],
         [aug.ToTensor()],
         [aug.NormalizeTensor(mean_rgb=[0.485, 0.456, 0.406], std_rgb=[0.229, 0.224, 0.225],
-                            mean_seg=[0.5], std_seg=[0.5], segmentation_ch=segmentation_ch)]
+                            mean_seg=[0.5], std_seg=[0.5], segmentation_ch=segmentation_ch,
+                            use_flux_tensor=use_flux_tensor)]
     ]
-    dataloader = CDNet2014Loader({cat:[vid]}, empty_bg=empty_bg, recent_bg=recent_bg,
+    dataloader = CDNet2014Loader({cat:[vid]}, empty_bg=empty_bg, recent_bg=recent_bg, use_flux_tensor=use_flux_tensor,
                               segmentation_ch=segmentation_ch, transforms=transforms,
                               use_selected=use_selected, multiplier=0)
+
     tensorloader = torch.utils.data.DataLoader(dataset=dataloader,
                                                batch_size=1,
                                                shuffle=False,
@@ -131,8 +135,8 @@ def evalVideo(cat, vid, model, empty_bg=False, recent_bg=False, segmentation_ch=
 
     return 1-recall, prec, f_score
 
-def logVideos(dataset, model, model_name, csv_path, empty_bg=False, recent_bg=False, segmentation_ch=False, eps=1e-5,
-              save_vid=False, save_outputs="", set_number=0, debug=False):
+def logVideos(dataset, model, model_name, csv_path, empty_bg=False, use_flux_tensor=False, recent_bg=False,
+              segmentation_ch=False, eps=1e-5, save_vid=False, save_outputs="", set_number=0, debug=False):
     """ Evaluate the videos given in dataset and log them to a csv file
     Args:
         :dataset (dict):                Dictionary of dataset. Keys are the categories (string),
@@ -141,6 +145,7 @@ def logVideos(dataset, model, model_name, csv_path, empty_bg=False, recent_bg=Fa
         :model_name (string):           Name of the model for logging
         :csv_path (string):             Path to the CSV file
         :empty_bg (boolean):            Boolean for using the empty background frame
+        :use_flux_tensor                'False' or 'True'
         :recent_bg (boolean):           Boolean for using the recent background frame
         :segmentation_ch (boolean):     Boolean for using the segmentation maps
         :eps (float):                   A small multiplier for making the operations easier
@@ -155,9 +160,10 @@ def logVideos(dataset, model, model_name, csv_path, empty_bg=False, recent_bg=Fa
     for cat, vids in dataset.items():
         for vid in vids:
             print(vid)
-            fnr, prec, f_score = evalVideo(cat, vid, model, empty_bg=empty_bg, recent_bg=recent_bg,
-                                           segmentation_ch=segmentation_ch, eps=eps, save_vid=save_vid,
-                                           save_outputs=save_outputs, model_name=model_name, debug=debug)
+            fnr, prec, f_score = evalVideo(cat, vid, model, empty_bg=empty_bg, use_flux_tensor=use_flux_tensor,
+                                           recent_bg=recent_bg, segmentation_ch=segmentation_ch, eps=eps,
+                                           save_vid=save_vid, save_outputs=save_outputs, model_name=model_name,
+                                           debug=debug)
 
             new_row[csv_header2loc[vid]] = fnr
             new_row[csv_header2loc[vid]+1] = prec
