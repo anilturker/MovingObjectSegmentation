@@ -60,7 +60,7 @@ class AdditiveRandomIllumation:
             CD output: Updated CD output.
         """
         illumination = (np.random.randn() * self.std_global[0]) + \
-                       (np.random.randn(3) * self.std_global[1])
+                       (np.random.randn(1) * self.std_global[1])
 
         if self.debug:
             print("Applying random illumination difference")
@@ -71,7 +71,7 @@ class AdditiveRandomIllumation:
 
         if cd_inp["empty_bg"] is not None:
             cd_inp["empty_bg"] += (np.random.randn() * self.std_illdiff[0]) +\
-                                  (np.random.randn(3) * self.std_illdiff[1])
+                                  (np.random.randn(1) * self.std_illdiff[1])
 
         return cd_inp, cd_out
 
@@ -102,7 +102,7 @@ class AdditiveNoise:
         h, w, c = cd_out.shape
         for inp_type in only_rgb_inputs:
             if cd_inp[inp_type] is not None:
-                cd_inp[inp_type] += np.random.randn(h, w, 3) * self.std_noise
+                cd_inp[inp_type] += np.random.randn(h, w, 1) * self.std_noise
 
         return cd_inp, cd_out
 
@@ -454,16 +454,16 @@ class NormalizeTensor:
         c, h, w = inp.shape
 
         normalized_frame = int(1*self.empty_bg + 1*self.recent_bg + 1*self.current_fr)
-        normalized_channel_size = normalized_frame * (3 + 1*self.segmentation_ch)
+        normalized_channel_size = normalized_frame * (1 + 1*self.segmentation_ch)
 
         mean_vec = np.concatenate([mean_period for _ in range(normalized_frame)])
         std_vec = np.concatenate([std_period for _ in range(normalized_frame)])
 
         inp_n = tvtf.Normalize(mean_vec, std_vec)(inp[:normalized_channel_size])
         if c > normalized_channel_size:
-            inp_res = torch.cat((inp_n, inp[normalized_channel_size:]), dim=0)
+            inp_n = torch.cat((inp_n, inp[normalized_channel_size:]), dim=0)
 
-        return inp_res, out
+        return inp_n, out
 
 def _centerCrop(im, w_, h_):
     """

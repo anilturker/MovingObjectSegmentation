@@ -6,17 +6,17 @@ import torch
 import torch.nn as nn
 
 from models.unet_tools import UNetDown, UNetUp, ConvSig, FCNN
-from models.AvFeat import AvFeat
+from models.temporal_networks import AvFeat
 
 
 class conv_block(nn.Module):
     def __init__(self,ch_in,ch_out):
         super(conv_block,self).__init__()
         self.conv = nn.Sequential(
-            nn.Conv2d(ch_in, ch_out, kernel_size=3,stride=1,padding=1,bias=True),
+            nn.Conv2d(ch_in, ch_out, kernel_size=3, stride=1, padding=1, bias=True),
             nn.BatchNorm2d(ch_out),
             nn.ReLU(inplace=True),
-            nn.Conv2d(ch_out, ch_out, kernel_size=3,stride=1,padding=1,bias=True),
+            nn.Conv2d(ch_out, ch_out, kernel_size=3, stride=1, padding=1, bias=True),
             nn.BatchNorm2d(ch_out),
             nn.ReLU(inplace=True)
         )
@@ -148,82 +148,6 @@ class AttU_Net(nn.Module):
         # Apply weight initialization
         self.apply(self.weight_init)
 
-    class R2AttU_Net(nn.Module):
-        def __init__(self, img_ch=3, output_ch=1, t=2):
-            super.__init__()
-
-            self.Maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
-            self.Upsample = nn.Upsample(scale_factor=2)
-
-            self.RRCNN1 = RRCNN_block(ch_in=img_ch, ch_out=64, t=t)
-
-            self.RRCNN2 = RRCNN_block(ch_in=64, ch_out=128, t=t)
-
-            self.RRCNN3 = RRCNN_block(ch_in=128, ch_out=256, t=t)
-
-            self.RRCNN4 = RRCNN_block(ch_in=256, ch_out=512, t=t)
-
-            self.RRCNN5 = RRCNN_block(ch_in=512, ch_out=1024, t=t)
-
-            self.Up5 = up_conv(ch_in=1024, ch_out=512)
-            self.Att5 = Attention_block(F_g=512, F_l=512, F_int=256)
-            self.Up_RRCNN5 = RRCNN_block(ch_in=1024, ch_out=512, t=t)
-
-            self.Up4 = up_conv(ch_in=512, ch_out=256)
-            self.Att4 = Attention_block(F_g=256, F_l=256, F_int=128)
-            self.Up_RRCNN4 = RRCNN_block(ch_in=512, ch_out=256, t=t)
-
-            self.Up3 = up_conv(ch_in=256, ch_out=128)
-            self.Att3 = Attention_block(F_g=128, F_l=128, F_int=64)
-            self.Up_RRCNN3 = RRCNN_block(ch_in=256, ch_out=128, t=t)
-
-            self.Up2 = up_conv(ch_in=128, ch_out=64)
-            self.Att2 = Attention_block(F_g=64, F_l=64, F_int=32)
-            self.Up_RRCNN2 = RRCNN_block(ch_in=128, ch_out=64, t=t)
-
-            self.Conv_1x1 = nn.Conv2d(64, output_ch, kernel_size=1, stride=1, padding=0)
-
-        def forward(self, x):
-            # encoding path
-            x1 = self.RRCNN1(x)
-
-            x2 = self.Maxpool(x1)
-            x2 = self.RRCNN2(x2)
-
-            x3 = self.Maxpool(x2)
-            x3 = self.RRCNN3(x3)
-
-            x4 = self.Maxpool(x3)
-            x4 = self.RRCNN4(x4)
-
-            x5 = self.Maxpool(x4)
-            x5 = self.RRCNN5(x5)
-
-            # decoding + concat path
-            d5 = self.Up5(x5)
-            x4 = self.Att5(g=d5, x=x4)
-            d5 = torch.cat((x4, d5), dim=1)
-            d5 = self.Up_RRCNN5(d5)
-
-            d4 = self.Up4(d5)
-            x3 = self.Att4(g=d4, x=x3)
-            d4 = torch.cat((x3, d4), dim=1)
-            d4 = self.Up_RRCNN4(d4)
-
-            d3 = self.Up3(d4)
-            x2 = self.Att3(g=d3, x=x2)
-            d3 = torch.cat((x2, d3), dim=1)
-            d3 = self.Up_RRCNN3(d3)
-
-            d2 = self.Up2(d3)
-            x1 = self.Att2(g=d2, x=x1)
-            d2 = torch.cat((x1, d2), dim=1)
-            d2 = self.Up_RRCNN2(d2)
-
-            d1 = self.Conv_1x1(d2)
-
-            return d1
-
     def forward(self, x):
         # encoding path
         x1 = self.Conv1(x)
@@ -267,6 +191,7 @@ class AttU_Net(nn.Module):
 
 
 class AttU_AvFeat_Net(nn.Module):
+
     @staticmethod
     def weight_init(m):
         if isinstance(m, nn.Conv2d):
@@ -278,11 +203,12 @@ class AttU_AvFeat_Net(nn.Module):
         elif isinstance(m, nn.Linear):
             nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
             nn.init.constant_(m.bias.data, 0)
+
     def __init__(self, inp_ch, temporal_length, filter_size):
         super(AttU_AvFeat_Net, self).__init__()
 
         self.temporal_length = temporal_length
-        self.AvFeat = AvFeat(temporal_length=temporal_length, filter_size=filter_size)
+        self.AvFeat = AvFeat(filter_size=filter_size)
 
         self.Maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
 
@@ -309,6 +235,9 @@ class AttU_AvFeat_Net(nn.Module):
         self.Up_conv2 = conv_block(ch_in=128, ch_out=64)
 
         self.out = ConvSig(64)
+
+        # Apply weight initialization
+        self.apply(self.weight_init)
 
     def forward(self, x):
 
@@ -363,3 +292,110 @@ class AttU_AvFeat_Net(nn.Module):
 
         return d1
 
+
+class R2AttU_AvFeat_Net(nn.Module):
+
+    @staticmethod
+    def weight_init(m):
+        if isinstance(m, nn.Conv2d):
+            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+            nn.init.constant_(m.bias.data, 0)
+        elif isinstance(m, nn.Conv3d):
+            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+            nn.init.constant_(m.bias.data, 0)
+        elif isinstance(m, nn.Linear):
+            nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
+            nn.init.constant_(m.bias.data, 0)
+
+    def __init__(self, inp_ch=3, output_ch=1, temporal_length=50, filter_size=8, t=2):
+        super(R2AttU_AvFeat_Net, self).__init__()
+
+        self.temporal_length = temporal_length
+        self.AvFeat = AvFeat(filter_size=filter_size)
+
+        self.Maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.Upsample = nn.Upsample(scale_factor=2)
+
+        self.RRCNN1 = RRCNN_block(ch_in=inp_ch, ch_out=64, t=t)
+
+        self.RRCNN2 = RRCNN_block(ch_in=64, ch_out=128, t=t)
+
+        self.RRCNN3 = RRCNN_block(ch_in=128, ch_out=256, t=t)
+
+        self.RRCNN4 = RRCNN_block(ch_in=256, ch_out=512, t=t)
+
+        self.RRCNN5 = RRCNN_block(ch_in=512, ch_out=1024, t=t)
+
+        self.Up5 = up_conv(ch_in=1024, ch_out=512)
+        self.Att5 = Attention_block(F_g=512, F_l=512, F_int=256)
+        self.Up_RRCNN5 = RRCNN_block(ch_in=1024, ch_out=512, t=t)
+
+        self.Up4 = up_conv(ch_in=512, ch_out=256)
+        self.Att4 = Attention_block(F_g=256, F_l=256, F_int=128)
+        self.Up_RRCNN4 = RRCNN_block(ch_in=512, ch_out=256, t=t)
+
+        self.Up3 = up_conv(ch_in=256, ch_out=128)
+        self.Att3 = Attention_block(F_g=128, F_l=128, F_int=64)
+        self.Up_RRCNN3 = RRCNN_block(ch_in=256, ch_out=128, t=t)
+
+        self.Up2 = up_conv(ch_in=128, ch_out=64)
+        self.Att2 = Attention_block(F_g=64, F_l=64, F_int=32)
+        self.Up_RRCNN2 = RRCNN_block(ch_in=128, ch_out=64, t=t)
+
+        self.out = ConvSig(64)
+
+        # Apply weight initialization
+        self.apply(self.weight_init)
+
+    def forward(self, x):
+
+        # Unsqueeze tensor and give temporal frames to temporal network(AvFeat)
+        with torch.no_grad():
+            # Get temporal frames
+            b, c, h, w = x.shape
+            temporal_network_first_index = c - self.temporal_length
+            temporal_patch = torch.tensor(x[:, temporal_network_first_index:],
+                                          dtype=torch.float).unsqueeze(dim=1)
+            curr_patch = torch.tensor(x[:, :temporal_network_first_index], dtype=torch.float)
+
+        avfeat = self.AvFeat(temporal_patch)
+
+        # encoding path
+        x1 = self.RRCNN1(torch.cat((curr_patch, avfeat), dim=1))
+
+        x2 = self.Maxpool(x1)
+        x2 = self.RRCNN2(x2)
+
+        x3 = self.Maxpool(x2)
+        x3 = self.RRCNN3(x3)
+
+        x4 = self.Maxpool(x3)
+        x4 = self.RRCNN4(x4)
+
+        x5 = self.Maxpool(x4)
+        x5 = self.RRCNN5(x5)
+
+        # decoding + concat path
+        d5 = self.Up5(x5)
+        x4 = self.Att5(g=d5, x=x4)
+        d5 = torch.cat((x4, d5), dim=1)
+        d5 = self.Up_RRCNN5(d5)
+
+        d4 = self.Up4(d5)
+        x3 = self.Att4(g=d4, x=x3)
+        d4 = torch.cat((x3, d4), dim=1)
+        d4 = self.Up_RRCNN4(d4)
+
+        d3 = self.Up3(d4)
+        x2 = self.Att3(g=d3, x=x2)
+        d3 = torch.cat((x2, d3), dim=1)
+        d3 = self.Up_RRCNN3(d3)
+
+        d2 = self.Up2(d3)
+        x1 = self.Att2(g=d2, x=x1)
+        d2 = torch.cat((x1, d2), dim=1)
+        d2 = self.Up_RRCNN2(d2)
+
+        d1 = self.out(d2)
+
+        return d1

@@ -117,6 +117,6 @@ datasets_test = {
         'turbulence':['turbulence3']
         },
     5: {
-         'lowFramerate':['tramCrossroad_1fps']
+         'lowFramerate':['port_0_17fps']
         }, # small dataset for quick debugging
 }

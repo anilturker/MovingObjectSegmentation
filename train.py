@@ -10,8 +10,10 @@ from utils import augmentations as aug
 from utils.data_loader import CDNet2014Loader
 from utils import losses
 from models.unet import unet_vgg16
-from models.unet_attention import AttU_Net, AttU_AvFeat_Net
+from models.unet_attention import AttU_Net, AttU_AvFeat_Net, R2AttU_AvFeat_Net
+from models.encoder_decoder_nets import FgNet
 from tensorboardX import SummaryWriter
+
 import torchvision.models as models
 import time
 
@@ -26,20 +28,24 @@ def print_debug(s):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='BSUV-Net-2.0 pyTorch')
-    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unet_temporal_network',
+    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='R2AttU_temporal_network_attention_flux',
                         help='Which network to use. unetvgg16, unet_attention, unet_attention_flux,'
-                             'unet_no_empty_attention, unet_no_empty_attention_flux, unet_temporal_network')
+                             'unet_no_empty_attention, unet_no_empty_attention_flux, unet_temporal_network_attention,'
+                             'unet_temporal_network_attention_flux, unet_temporal_network, sparse_unet_flux'
+                             'R2AttU_temporal_network_attention_flux')
 
     # Input images
     parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
                         help='Size of the inputs. If equals 0, use the original sized images. '
                              'Assumes square sized input')
-    parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='no',
+    parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='manual',
                         help='Which empty background to use? no, manual or automatic')
-    parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=0,
+    parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=1,
                         help='Use recent background frame as an input as well. 0 or 1')
     parser.add_argument('--seg_ch', metavar='Segmentation', dest='seg_ch', type=int, default=1,
                         help='Whether to use the FPM channel input or not. 0 or 1')
+    parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=1,
+                        help='Whether to use the flux tensor input or not. 0 or 1')
     parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=1,
                         help='Whether to use the current frame or not. 0 or 1')
 
@@ -91,6 +97,7 @@ if __name__ == '__main__':
     network = args.network
     empty_bg = args.empty_bg
     current_fr = args.current_fr
+    use_flux_tensor = args.flux_ch
     recent_bg = True if args.recent_bg == 1 else False
     seg_ch = True if args.seg_ch == 1 else False
     lr = args.lr
@@ -105,7 +112,6 @@ if __name__ == '__main__':
     else:
         inp_size = (inp_size, inp_size)
 
-    use_flux_tensor = False
     use_temporal_network = False
     temporal_length = 50
     temporal_kernel_size = 8
@@ -130,10 +136,7 @@ if __name__ == '__main__':
     # naming for log keeping
     fname = args.model_name + "_network_" + network
 
-    if network == "unet_attention_flux" or network == "unet_no_empty_attention_flux":
-        use_flux_tensor = True
-
-    if network == "unet_temporal_network":
+    if network == "unet_temporal_network" or "unet_temporal_network_attention":
         use_temporal_network = True
 
     print(f"Model started: {fname}")
@@ -204,8 +207,8 @@ if __name__ == '__main__':
         noise = 0.01
         additional_augs.append([aug.AdditiveNoise(noise)])
 
-    mean_rgb = [x for x in [0.485, 0.456, 0.406]]
-    std_rgb = [x for x in [0.229, 0.224, 0.225]]
+    mean_rgb = [x for x in [0.485]]
+    std_rgb = [x for x in [0.229]]
     mean_seg = [x for x in [0.5]]
     std_seg = [x for x in [0.5]]
 
@@ -245,7 +248,7 @@ if __name__ == '__main__':
     )
 
     # load model
-    num_ch_per_inp = (3 + (1 * seg_ch))
+    num_ch_per_inp = (1 + (1 * seg_ch))
     num_inp = ((1 * (empty_bg != "no")) + (1 * recent_bg) + 1)
     num_ch = num_inp * num_ch_per_inp + 1 * (use_flux_tensor == True)
 
@@ -254,9 +257,15 @@ if __name__ == '__main__':
     elif network == "unet_attention" or network == "unet_attention_flux" \
         or network == "unet_no_empty_attention" or network == "unet_no_empty_attention_flux":
         model = AttU_Net(inp_ch=num_ch)
-    elif network == "unet_temporal_network_attention":
-        model = AttU_AvFeat_Net(inp_ch=num_ch + temporal_kernel_size, temporal_length=temporal_length,
+    elif network == "unet_temporal_network_attention" or network == "unet_temporal_network_attention_flux":
+        model = AttU_AvFeat_Net(inp_ch=num_ch + int(temporal_kernel_size), temporal_length=temporal_length,
                                 filter_size=temporal_kernel_size)
+    elif network == "sparse_unet_flux":
+        model = FgNet(inp_ch=num_ch + int(temporal_kernel_size), temporal_length=temporal_length, filter_size=temporal_kernel_size)
+    elif network == "R2AttU_temporal_network_attention_flux":
+        model = R2AttU_AvFeat_Net(inp_ch=num_ch + int(temporal_kernel_size), output_ch=1, temporal_length=temporal_length,
+                                filter_size=temporal_kernel_size)
+
     else:
         raise ValueError(f"network = {network} is not defined")
 
@@ -312,14 +321,17 @@ if __name__ == '__main__':
 
     if model_chk:
         chk_path = f"{mdl_dir}/checkpoint.pth"
-        assert os.path.isfile(chk_path), f"No checkpoint is found in {chk_path}"
-        print(f"=> loading checkpoint '{model_chk}'")
-        checkpoint = torch.load(chk_path)
-        start_epoch = checkpoint['epoch']
-        model.load_state_dict(checkpoint['state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer'])
-        print("=> loaded checkpoint '{}' (epoch {})"
-              .format(model_chk, checkpoint['epoch']))
+        if os.path.exists(chk_path):
+            assert os.path.isfile(chk_path), f"No checkpoint is found in {chk_path}"
+            print(f"=> loading checkpoint '{model_chk}'")
+            checkpoint = torch.load(chk_path)
+            start_epoch = checkpoint['epoch']
+            model.load_state_dict(checkpoint['state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            print("=> loaded checkpoint '{}' (epoch {})"
+                  .format(model_chk, checkpoint['epoch']))
+        else:
+            start_epoch = 0
     else:
         start_epoch = 0
 

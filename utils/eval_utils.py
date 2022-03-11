@@ -12,9 +12,12 @@ import numpy as np
 # Locations of each video in the CSV file
 csv_header2loc = data_config.csv_header2loc
 
+cuda = True
 
-def evalVideo(cat, vid, model, empty_bg=False, use_flux_tensor=False, recent_bg=False, segmentation_ch=False, eps=1e-5,
-              save_vid=False, save_outputs="", model_name="", debug=False, use_selected=False, multiplier=16):
+def evalVideo(cat, vid, model, current_fr=False, empty_bg=False, use_flux_tensor=False,
+              temporal_length=50, recent_bg=False, use_temporal_network=False,
+              segmentation_ch=False, eps=1e-5, save_vid=False, save_outputs="", model_name="", debug=False,
+              use_selected=False, multiplier=16):
     """ Evalautes the trained model on all ROI frames of cat/vid
     Args:
         :cat (string):                  Category
@@ -31,16 +34,21 @@ def evalVideo(cat, vid, model, empty_bg=False, use_flux_tensor=False, recent_bg=
         :debug (boolean):               Use for quick debugging
     """
 
+    mean_rgb = [x for x in [0.485]]
+    std_rgb = [x for x in [0.229]]
+    mean_seg = [x for x in [0.5]]
+    std_seg = [x for x in [0.5]]
+
     transforms = [
         [aug.Resize((240, 320))],
         [aug.ToTensor()],
-        [aug.NormalizeTensor(mean_rgb=[0.485, 0.456, 0.406], std_rgb=[0.229, 0.224, 0.225],
-                            mean_seg=[0.5], std_seg=[0.5], segmentation_ch=segmentation_ch,
-                            use_flux_tensor=use_flux_tensor)]
+        [aug.NormalizeTensor(mean_rgb=mean_rgb, std_rgb=std_rgb,
+                             mean_seg=mean_seg, std_seg=std_seg, segmentation_ch=segmentation_ch,
+                             recent_bg=recent_bg, empty_bg=(empty_bg != "no"), current_fr=current_fr)]
     ]
-    dataloader = CDNet2014Loader({cat:[vid]}, empty_bg=empty_bg, recent_bg=recent_bg, use_flux_tensor=use_flux_tensor,
-                              segmentation_ch=segmentation_ch, transforms=transforms,
-                              use_selected=use_selected, multiplier=0)
+    dataloader = CDNet2014Loader({cat:[vid]}, empty_bg=empty_bg, use_flux_tensor=use_flux_tensor, recent_bg=recent_bg,
+        use_temporal_network=use_temporal_network, temporal_length=temporal_length, use_selected=200,
+        segmentation_ch=segmentation_ch, transforms=transforms, shuffle=True)
 
     tensorloader = torch.utils.data.DataLoader(dataset=dataloader,
                                                batch_size=1,
@@ -80,9 +88,14 @@ def evalVideo(cat, vid, model, empty_bg=False, use_flux_tensor=False, recent_bg=
             break
         if (i+1) % 1000 == 0:
             print("%d/%d" %(i+1, len(tensorloader)))
-        input, label = data[0].float(), data[1].float()
 
-        input, label = input.cuda(), label.cuda()
+        if use_temporal_network:
+            input, label = torch.cat((data[0], data[1]), dim=1), data[2].float()
+        else:
+            input, label = data[0].float(), data[1].float()
+        if cuda:
+            input, label = input.cuda(), label.cuda()
+
         _, _, h, w = input.shape
         right_pad, bottom_pad = -w % multiplier, -h % multiplier
         zeropad = torch.nn.ZeroPad2d((0, right_pad, 0, bottom_pad))
@@ -135,7 +148,8 @@ def evalVideo(cat, vid, model, empty_bg=False, use_flux_tensor=False, recent_bg=
 
     return 1-recall, prec, f_score
 
-def logVideos(dataset, model, model_name, csv_path, empty_bg=False, use_flux_tensor=False, recent_bg=False,
+def logVideos(dataset, model, model_name, csv_path, empty_bg=False, current_fr=False, use_flux_tensor=False,
+              use_temporal_network=False, recent_bg=False, temporal_length=50,
               segmentation_ch=False, eps=1e-5, save_vid=False, save_outputs="", set_number=0, debug=False):
     """ Evaluate the videos given in dataset and log them to a csv file
     Args:
@@ -160,7 +174,9 @@ def logVideos(dataset, model, model_name, csv_path, empty_bg=False, use_flux_ten
     for cat, vids in dataset.items():
         for vid in vids:
             print(vid)
-            fnr, prec, f_score = evalVideo(cat, vid, model, empty_bg=empty_bg, use_flux_tensor=use_flux_tensor,
+            fnr, prec, f_score = evalVideo(cat, vid, model, current_fr=current_fr, empty_bg=empty_bg,
+                                           use_flux_tensor=use_flux_tensor, use_temporal_network=use_temporal_network,
+                                           temporal_length=temporal_length,
                                            recent_bg=recent_bg, segmentation_ch=segmentation_ch, eps=eps,
                                            save_vid=save_vid, save_outputs=save_outputs, model_name=model_name,
                                            debug=debug)

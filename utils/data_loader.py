@@ -111,14 +111,18 @@ class CDNet2014Loader(data.Dataset):
             empty_bg_fpm_path = data_config.empty_bg_fpm_path.format(
                 cat=cat, vid=vid, fr_id=str(fr_id).zfill(6))
             if not os.path.exists(empty_bg_path):
+                empty_bg_id = random.choice(
+                    os.listdir(
+                        data_config.empty_bg_root.format(cat=cat, vid=vid)
+                    ))[-10:-4]
                 empty_bg_path = data_config.empty_bg_path.format(
-                    cat=cat, vid=vid, fr_id=str(fr_id).zfill(6))
+                    cat=cat, vid=vid, fr_id=empty_bg_id)
                 empty_bg_fpm_path = data_config.empty_bg_fpm_path.format(
-                    cat=cat, vid=vid, fr_id=str(fr_id).zfill(6))
+                    cat=cat, vid=vid, fr_id=empty_bg_id)
             if not os.path.exists(empty_bg_path):
                 raise(f"No empty BG found for {cat}/{vid}")
 
-            inp["empty_bg"] = self.__readRGB(empty_bg_path)
+            inp["empty_bg"] = self.__readGray(empty_bg_path)
 
         elif self.empty_bg != "no":
             raise ValueError(f"empty_bg should be no or manual; but given '{self.empty_bg}'")
@@ -131,13 +135,13 @@ class CDNet2014Loader(data.Dataset):
                                        .format(cat=cat, vid=vid, fr_id=str(fr_id).zfill(6)))
 
         if self.recent_bg:
-            inp["recent_bg"] = self.__readRGB(data_config.recent_bg_path\
+            inp["recent_bg"] = self.__readGray(data_config.recent_bg_path\
                                    .format(cat=cat, vid=vid, fr_id=str(fr_id).zfill(6)))
         if self.segmentation_ch:
             inp["current_fr_seg"] = self.__readGray(data_config.current_fr_fpm_path\
                                         .format(cat=cat, vid=vid, fr_id=str(fr_id).zfill(6)))
 
-        inp["current_fr"] = self.__readRGB(data_config.current_fr_path\
+        inp["current_fr"] = self.__readGray(data_config.current_fr_path\
                                 .format(cat=cat, vid=vid, fr_id=str(fr_id).zfill(6)))
 
         label = self.__readGray(data_config.gt_path \

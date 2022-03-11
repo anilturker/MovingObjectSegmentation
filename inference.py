@@ -13,20 +13,27 @@ from utils.eval_utils import logVideos
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='BSUV-Net-2.0 pyTorch')
-    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unet_no_empty_attention_flux',
+    parser.add_argument('--network', metavar='Network', dest='network', type=str,
+                        default='R2AttU_temporal_network_attention_flux',
                         help='Which network to use. unetvgg16, unet_attention, unet_attention_flux,'
-                             'original, unet_no_empty_attention, unet_no_empty_attention_flux')
+                             'unet_no_empty_attention, unet_no_empty_attention_flux, unet_temporal_network_attention,'
+                             'unet_temporal_network_attention_flux, unet_temporal_network, sparse_unet_flux'
+                             'R2AttU_temporal_network_attention_flux')
 
     # Input images
     parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
                         help='Size of the inputs. If equals 0, use the original sized images. '
                              'Assumes square sized input')
-    parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='no',
+    parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='manual',
                         help='Which empty background to use? no, manual or automatic')
     parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=1,
                         help='Use recent background frame as an input as well. 0 or 1')
     parser.add_argument('--seg_ch', metavar='Segmentation', dest='seg_ch', type=int, default=1,
                         help='Whether to use the FPM channel input or not. 0 or 1')
+    parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=1,
+                        help='Whether to use the flux tensor input or not. 0 or 1')
+    parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=1,
+                        help='Whether to use the current frame or not. 0 or 1')
 
     # Optimization
     parser.add_argument('--lr', metavar='Learning Rate', dest='lr', type=float, default=1e-4,
@@ -61,7 +68,7 @@ if __name__ == '__main__':
     # Cross-validation
     # You can select more than one train-test split, specify the id's of them
     parser.add_argument('--set_number', metavar='Which training-test split to use from config file', dest='set_number',
-                        type=int, default=[5], help='Training and test videos will be selected based on the set number')
+                        type=int, default=[1], help='Training and test videos will be selected based on the set number')
 
     # Model name
     parser.add_argument('--model_name', metavar='Name of the model for log keeping', dest='model_name',
@@ -71,6 +78,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     network = args.network
     empty_bg = args.empty_bg
+    current_fr = args.current_fr
+    use_flux_tensor = args.flux_ch
     recent_bg = True if args.recent_bg == 1 else False
     seg_ch = True if args.seg_ch == 1 else False
     lr = args.lr
@@ -85,7 +94,9 @@ if __name__ == '__main__':
     else:
         inp_size = (inp_size, inp_size)
 
-    use_flux_tensor = False
+    use_temporal_network = False
+    temporal_length = 50
+    temporal_kernel_size = 8
 
     aug_noise = args.aug_noise
     aug_rsc = args.aug_rsc
@@ -96,6 +107,7 @@ if __name__ == '__main__':
     set_number = args.set_number
     cuda = True
 
+    # naming for log keeping
     fname = args.model_name + "_network_" + network
 
     save_dir = data_config.save_dir
@@ -103,6 +115,9 @@ if __name__ == '__main__':
 
     if network == "unet_attention_flux" or network == "unet_no_empty_attention_flux":
         use_flux_tensor = True
+
+    if network == "unet_temporal_network" or "unet_temporal_network_attention":
+        use_temporal_network = True
 
     # Evaluation on test videos
     model = torch.load(f"{mdl_dir}/model_best.mdl").cuda()
@@ -148,11 +163,14 @@ if __name__ == '__main__':
             model,
             fname,
             csv_path,
+            current_fr=current_fr,
             empty_bg=empty_bg,
             use_flux_tensor=use_flux_tensor,
+            use_temporal_network=use_temporal_network,
+            temporal_length=temporal_length,
             recent_bg=recent_bg,
             segmentation_ch=seg_ch,
-            save_vid=0,
+            save_vid=False,
             set_number=set_number,
             debug=False
         )
