@@ -10,14 +10,14 @@ from utils import augmentations as aug
 from utils.data_loader import CDNet2014Loader
 from utils import losses
 from models.unet import unet_vgg16
-from models.unet_attention import AttU_Net, AttU_AvFeat_Net, R2AttU_AvFeat_Net
-from models.encoder_decoder_nets import FgNet
+from models.unet_attention import AttU_Net, R2AttU_Net
+from models.sparse_unet import FgNet
 from tensorboardX import SummaryWriter
 
 import torchvision.models as models
 import time
 
-DEBUG = True
+DEBUG = False
 
 
 def print_debug(s):
@@ -28,11 +28,11 @@ def print_debug(s):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='BSUV-Net-2.0 pyTorch')
-    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='R2AttU_temporal_network_attention_flux',
-                        help='Which network to use. unetvgg16, unet_attention, unet_attention_flux,'
-                             'unet_no_empty_attention, unet_no_empty_attention_flux, unet_temporal_network_attention,'
-                             'unet_temporal_network_attention_flux, unet_temporal_network, sparse_unet_flux'
-                             'R2AttU_temporal_network_attention_flux')
+    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unetvgg16',
+                        help='Which network to use. unetvgg16, unet_attention, sparse_unet, R2AttU')
+
+    parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network', default='avfeat_tdr',
+                        help='Which temporal network will use. no, avfeat, tdr, avfeat_tdr')
 
     # Input images
     parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
@@ -40,11 +40,11 @@ if __name__ == '__main__':
                              'Assumes square sized input')
     parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='manual',
                         help='Which empty background to use? no, manual or automatic')
-    parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=1,
+    parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=0,
                         help='Use recent background frame as an input as well. 0 or 1')
-    parser.add_argument('--seg_ch', metavar='Segmentation', dest='seg_ch', type=int, default=1,
+    parser.add_argument('--seg_ch', metavar='Segmentation', dest='seg_ch', type=int, default=0,
                         help='Whether to use the FPM channel input or not. 0 or 1')
-    parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=1,
+    parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=0,
                         help='Whether to use the flux tensor input or not. 0 or 1')
     parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=1,
                         help='Whether to use the current frame or not. 0 or 1')
@@ -52,11 +52,9 @@ if __name__ == '__main__':
     # Optimization
     parser.add_argument('--lr', metavar='Learning Rate', dest='lr', type=float, default=1e-4,
                         help='learning rate of the optimization')
-    parser.add_argument('--'
-                        ''
-                        ',', metavar='weight_decay', dest='weight_decay', type=float, default=1e-2,
+    parser.add_argument('--weight_decay', metavar='weight_decay', dest='weight_decay', type=float, default=1e-2,
                         help='weight decay of the optimization')
-    parser.add_argument('--num_epochs', metavar='Number of epochs', dest='num_epochs', type=int, default=50,
+    parser.add_argument('--num_epochs', metavar='Number of epochs', dest='num_epochs', type=int, default=30,
                         help='Maximum number of epochs')
     parser.add_argument('--batch_size', metavar='Minibatch size', dest='batch_size', type=int, default=1,
                         help='Number of samples per minibatch')
@@ -80,6 +78,12 @@ if __name__ == '__main__':
                         type=float, default=0.1,
                         help='Probability of applying Intermittent Object Addition')
 
+    # Temporal network parameters
+    parser.add_argument('--temporal_history', metavar='Temporal History', dest='temporal_history', type=int,
+                        default=50, help='The number of historical frames')
+    parser.add_argument('--temporal_kernel_size', metavar='Temporal History', dest='temporal_kernel_size', type=int,
+                        default=8, help='Kernel size of temporal network')
+
     # Checkpoint
     parser.add_argument('--model_chk', metavar='Checkpoint for the model', dest='model_chk', type=int, default=1,
                         help='Whether to use checkpoint, 0 or 1')
@@ -95,6 +99,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     network = args.network
+    temporal_network = args.temporal_network
     empty_bg = args.empty_bg
     current_fr = args.current_fr
     use_flux_tensor = args.flux_ch
@@ -112,9 +117,11 @@ if __name__ == '__main__':
     else:
         inp_size = (inp_size, inp_size)
 
-    use_temporal_network = False
-    temporal_length = 50
-    temporal_kernel_size = 8
+    # Temporal network parameters
+    temporal_length = args.temporal_history
+    temporal_kernel_size = args.temporal_kernel_size
+
+    use_temporal_network = True if temporal_network != 'no' else False
 
     aug_noise = args.aug_noise
     aug_rsc = args.aug_rsc
@@ -135,9 +142,6 @@ if __name__ == '__main__':
 
     # naming for log keeping
     fname = args.model_name + "_network_" + network
-
-    if network == "unet_temporal_network" or "unet_temporal_network_attention":
-        use_temporal_network = True
 
     print(f"Model started: {fname}")
 
@@ -192,7 +196,6 @@ if __name__ == '__main__':
             iom_dataset,
             empty_bg=empty_bg,
             use_flux_tensor=use_flux_tensor,
-            use_temporal_network=False,
             temporal_length=temporal_length,
             recent_bg=recent_bg,
             segmentation_ch=seg_ch,
@@ -253,19 +256,17 @@ if __name__ == '__main__':
     num_ch = num_inp * num_ch_per_inp + 1 * (use_flux_tensor == True)
 
     if network == "unetvgg16":
-        model = unet_vgg16(inp_ch=num_ch, skip=1)
-    elif network == "unet_attention" or network == "unet_attention_flux" \
-        or network == "unet_no_empty_attention" or network == "unet_no_empty_attention_flux":
-        model = AttU_Net(inp_ch=num_ch)
-    elif network == "unet_temporal_network_attention" or network == "unet_temporal_network_attention_flux":
-        model = AttU_AvFeat_Net(inp_ch=num_ch + int(temporal_kernel_size), temporal_length=temporal_length,
-                                filter_size=temporal_kernel_size)
-    elif network == "sparse_unet_flux":
-        model = FgNet(inp_ch=num_ch + int(temporal_kernel_size), temporal_length=temporal_length, filter_size=temporal_kernel_size)
-    elif network == "R2AttU_temporal_network_attention_flux":
-        model = R2AttU_AvFeat_Net(inp_ch=num_ch + int(temporal_kernel_size), output_ch=1, temporal_length=temporal_length,
-                                filter_size=temporal_kernel_size)
-
+        model = unet_vgg16(inp_ch=num_ch, kernel_size=3, skip=1, temporal_network=temporal_network,
+                           temporal_length=temporal_length, filter_size=temporal_kernel_size)
+    elif network.startswith("unet_attention"):
+        model = AttU_Net(inp_ch=num_ch, temporal_network=temporal_network, temporal_length=temporal_length,
+                         filter_size=temporal_kernel_size)
+    elif network.startswith("sparse_unet"):
+        model = FgNet(inp_ch=num_ch, temporal_network=temporal_network, temporal_length=temporal_length,
+                         filter_size=temporal_kernel_size)
+    elif network.startswith('R2AttU'):
+        model = R2AttU_Net(inp_ch=num_ch, temporal_network=temporal_network, temporal_length=temporal_length,
+                         filter_size=temporal_kernel_size)
     else:
         raise ValueError(f"network = {network} is not defined")
 
@@ -336,7 +337,11 @@ if __name__ == '__main__':
         start_epoch = 0
 
     # training
-    best_f = 0.0  # For saving the best model
+    best_f = 0.0
+    epoch_loss = 0.0 # For saving the best model
+    epoch_acc = 0.0
+    epoch_f = 0.0
+
     st = time.time()
     for epoch in range(start_epoch, num_epochs):  # loop over the dataset multiple times
         for phase, tensorloader in [("Train", tensorloader_tr), ("Test", tensorloader_test)]:
@@ -351,10 +356,10 @@ if __name__ == '__main__':
 
                 if phase == "Train":
                     # get the inputs; data is a list of [inputs, labels]
-                    if use_temporal_network:
-                        inputs, labels = torch.cat((data[0], data[1]), dim=1), data[2].float()
-                    else:
+                    if temporal_network == 'no':
                         inputs, labels = data[0].float(), data[1].float()
+                    else:
+                        inputs, labels = torch.cat((data[0], data[1]), dim=1), data[2].float()
                     if cuda:
                         inputs, labels = inputs.cuda(), labels.cuda()
                     outputs = model(inputs)
@@ -366,10 +371,10 @@ if __name__ == '__main__':
                 else:
                     with torch.no_grad():
                         # get the inputs; data is a list of [inputs, labels]
-                        if use_temporal_network:
-                            inputs, labels = torch.cat((data[0], data[1]), dim=1), data[2].float()
-                        else:
+                        if temporal_network == 'no':
                             inputs, labels = data[0].float(), data[1].float()
+                        else:
+                            inputs, labels = torch.cat((data[0], data[1]), dim=1), data[2].float()
                         if cuda:
                             inputs, labels = inputs.cuda(), labels.cuda()
                         outputs = model(inputs)
@@ -416,13 +421,20 @@ if __name__ == '__main__':
             if (epoch + 1) % 20 == 0:
                 torch.save(model, f"{mdl_dir}/model_epoch{epoch + 1}.mdl")
 
+            writer.add_hparams({'network': network, 'temporal_network': temporal_network, 'current_epoch': epoch + 1,
+                                'batch_size': batch_size, 'empty_bg': empty_bg, 'current_fr': current_fr,
+                                'use_flux_tensor': use_flux_tensor, 'recent_bg': recent_bg, 'seg_ch': seg_ch,
+                                'lr': lr, 'weight_decay': weight_decay, 'loss': args.loss,
+                                'temporal_length': temporal_length,
+                                'temporal_kernel_size': temporal_kernel_size, 'opt': opt, 'inp_size': inp_size},
+                               {'epoch_loss': epoch_loss, 'epoch_acc': epoch_acc, 'epoch_f': epoch_f})
+
             st = time.time()
 
     # save the last model
     torch.save(model, f"{mdl_dir}/model_last.mdl")
 
-    writer.add_hparams({'lr': lr, 'bsize': batch_size, 'epoch_size' : num_epochs,
-                       'optimizer': opt, 'loss_fn': args.loss},
-                       {'epoch_loss': epoch_loss, 'epoch_acc':epoch_acc, 'epoch_f':epoch_f})
+    temporal_length = args.temporal_history
+    temporal_kernel_size = args.temporal_kernel_size
 
     print('Finished Training')

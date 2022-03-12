@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 class conv_block_3d(nn.Module):
     def __init__(self, ch_in, ch_out, kernel_size=(3, 3, 3), stride = (1, 1, 1), padding = (0, 0, 0)):
         super(conv_block_3d,self).__init__()
@@ -16,14 +17,15 @@ class conv_block_3d(nn.Module):
 
 
 class conv_block(nn.Module):
-    def __init__(self,ch_in, ch_out, kernel_size, stride, padding):
+    def __init__(self,ch_in, ch_out, maxpool, kernel_size, stride, padding):
         super(conv_block,self).__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(ch_in, ch_out, kernel_size=kernel_size, stride=stride, padding=1, bias=True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.BatchNorm2d(ch_out),
-            nn.ReLU(inplace=True),
-        )
+        self.conv = nn.Sequential()
+        self.conv.add_module("conv2d", nn.Conv2d(ch_in, ch_out, kernel_size=kernel_size, stride=stride, padding=padding,
+                                       bias=True))
+        if maxpool:
+            self.conv.add_module("maxpool2d", nn.MaxPool2d(kernel_size=2, stride=2))
+        self.conv.add_module("bn2d", nn.BatchNorm2d(ch_out))
+        self.conv.add_module("relu", nn.ReLU(inplace=True))
 
     def forward(self, x):
         x = self.conv(x)
@@ -82,35 +84,35 @@ class AvFeat(nn.Module):
 
 
 class TDR(nn.Module):
-
+    """
+    implements:
+        background estimation using temporal depth reduction
+        inputs:
+            image_fame: history image frame for background computation
+        return:
+            background estimation model
+    """
     def __init__(self, inp_ch):
-        """
-        implements:
-            background estimation using temporal depth reduction
-            inputs:
-                image_fame: history image frame for background computation
-            return:
-                background estimation model
-        """
-        self.tdr_layer_1_1 = conv_block(inp_ch, 32, kernel_size=(1, 1), stride=1, padding=0)
-        self.tdr_layer_1_2 = conv_block(inp_ch, 32, kernel_size=(3, 3), stride=1, padding=(1, 1))
-        self.tdr_layer_1_3 = conv_block(inp_ch, 32, kernel_size=(5, 5), stride=1, padding=(2, 2))
+        super().__init__()
+        self.tdr_layer_1_1 = conv_block(inp_ch, 32, maxpool=False, kernel_size=(1, 1), stride=1, padding=0)
+        self.tdr_layer_1_2 = conv_block(inp_ch, 32, maxpool=False, kernel_size=(3, 3), stride=1, padding=(1, 1))
+        self.tdr_layer_1_3 = conv_block(inp_ch, 32, maxpool=False, kernel_size=(5, 5), stride=1, padding=(2, 2))
 
-        self.tdr_layer_1 = conv_block(32 * 3, 32, kernel_size=(1, 1), stride=1, padding=0)
+        self.tdr_layer_1 = conv_block(32 * 3, 32, maxpool=False, kernel_size=(1, 1), stride=1, padding=0)
 
-        self.tdr_layer_2_1 = conv_block(32, 16, kernel_size=(1, 1), stride=1, padding=0)
-        self.tdr_layer_2_2 = conv_block(32, 16, kernel_size=(3, 3), stride=1, padding=(1, 1))
-        self.tdr_layer_2_3 = conv_block(32, 16, kernel_size=(5, 5), stride=1, padding=(2, 2))
+        self.tdr_layer_2_1 = conv_block(32, 16, maxpool=False, kernel_size=(1, 1), stride=1, padding=0)
+        self.tdr_layer_2_2 = conv_block(32, 16, maxpool=False, kernel_size=(3, 3), stride=1, padding=(1, 1))
+        self.tdr_layer_2_3 = conv_block(32, 16, maxpool=False, kernel_size=(5, 5), stride=1, padding=(2, 2))
 
-        self.tdr_layer_2 = conv_block(16 * 3, 16, kernel_size=(1, 1), stride=1, padding=0)
+        self.tdr_layer_2 = conv_block(16 * 3, 16, maxpool=False, kernel_size=(1, 1), stride=1, padding=0)
 
-        self.tdr_layer_3_1 = conv_block(16, 8, kernel_size=(1, 1), stride=1, padding=0)
-        self.tdr_layer_3_2 = conv_block(16, 8, kernel_size=(3, 3), stride=1, padding=(1, 1))
-        self.tdr_layer_3_3 = conv_block(16, 8, kernel_size=(5, 5), stride=1, padding=(2, 2))
+        self.tdr_layer_3_1 = conv_block(16, 8, maxpool=False, kernel_size=(1, 1), stride=1, padding=0)
+        self.tdr_layer_3_2 = conv_block(16, 8, maxpool=False, kernel_size=(3, 3), stride=1, padding=(1, 1))
+        self.tdr_layer_3_3 = conv_block(16, 8, maxpool=False, kernel_size=(5, 5), stride=1, padding=(2, 2))
 
-        self.tdr_layer_3 = conv_block(8 * 3, 8, kernel_size=(1, 1), stride=1, padding=0)
+        self.tdr_layer_3 = conv_block(8 * 3, 8, maxpool=False, kernel_size=(1, 1), stride=1, padding=0)
 
-        self.tdr_layer_4 = conv_block(8, 1, kernel_size=(3, 3), stride=1, padding=1)
+        self.tdr_layer_4 = conv_block(8, 1, maxpool=False, kernel_size=(3, 3), stride=1, padding=1)
 
     def forward(self, inp):
 
@@ -128,16 +130,14 @@ class TDR(nn.Module):
         fused2 = torch.cat((x2_1, x2_2, x2_3), dim=1)
         fused2 = self.tdr_layer_2(fused2)
 
-        x3_1 = self.conv3_5x5(fused2)
-        x3_2 = self.conv3_3x3(fused2)
-        x3_3 = self.conv3_1x1(fused2)
+        x3_1 = self.tdr_layer_3_1(fused2)
+        x3_2 = self.tdr_layer_3_2(fused2)
+        x3_3 = self.tdr_layer_3_1(fused2)
 
         fused3 = torch.cat((x3_1, x3_2, x3_3), dim=1)
         fused3 = self.tdr_layer_3(fused3)
 
-        # 5D to 4D tensor
-        with torch.no_grad():
-            out = fused3.squeeze(dim=2)
+        out = self.tdr_layer_4(fused3)
 
         return out
 

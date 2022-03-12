@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 
 from models.unet_tools import UNetDown, UNetUp, ConvSig, FCNN
-from models.temporal_networks import AvFeat
+from models.temporal_networks import AvFeat, TDR
 
 
 class conv_block(nn.Module):
@@ -107,108 +107,32 @@ class Attention_block(nn.Module):
 
 
 class AttU_Net(nn.Module):
+
     @staticmethod
     def weight_init(m):
         if isinstance(m, nn.Conv2d):
+            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+            nn.init.constant_(m.bias.data, 0)
+        elif isinstance(m, nn.Conv3d):
             nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
             nn.init.constant_(m.bias.data, 0)
         elif isinstance(m, nn.Linear):
             nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
             nn.init.constant_(m.bias.data, 0)
 
-    def __init__(self, inp_ch):
+    def __init__(self, inp_ch, temporal_network, temporal_length, filter_size):
         super(AttU_Net, self).__init__()
 
-        self.Maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
-
-        self.Conv1 = conv_block(ch_in=inp_ch, ch_out=64)
-        self.Conv2 = conv_block(ch_in=64, ch_out=128)
-        self.Conv3 = conv_block(ch_in=128, ch_out=256)
-        self.Conv4 = conv_block(ch_in=256, ch_out=512)
-        self.Conv5 = conv_block(ch_in=512, ch_out=1024)
-
-        self.Up5 = up_conv(ch_in=1024, ch_out=512)
-        self.Att5 = Attention_block(F_g=512, F_l=512, F_int=256)
-        self.Up_conv5 = conv_block(ch_in=1024, ch_out=512)
-
-        self.Up4 = up_conv(ch_in=512, ch_out=256)
-        self.Att4 = Attention_block(F_g=256, F_l=256, F_int=128)
-        self.Up_conv4 = conv_block(ch_in=512, ch_out=256)
-
-        self.Up3 = up_conv(ch_in=256, ch_out=128)
-        self.Att3 = Attention_block(F_g=128, F_l=128, F_int=64)
-        self.Up_conv3 = conv_block(ch_in=256, ch_out=128)
-
-        self.Up2 = up_conv(ch_in=128, ch_out=64)
-        self.Att2 = Attention_block(F_g=64, F_l=64, F_int=32)
-        self.Up_conv2 = conv_block(ch_in=128, ch_out=64)
-
-        self.out = ConvSig(64)
-
-        # Apply weight initialization
-        self.apply(self.weight_init)
-
-    def forward(self, x):
-        # encoding path
-        x1 = self.Conv1(x)
-
-        x2 = self.Maxpool(x1)
-        x2 = self.Conv2(x2)
-
-        x3 = self.Maxpool(x2)
-        x3 = self.Conv3(x3)
-
-        x4 = self.Maxpool(x3)
-        x4 = self.Conv4(x4)
-
-        x5 = self.Maxpool(x4)
-        x5 = self.Conv5(x5)
-
-        # decoding + concat path
-        d5 = self.Up5(x5)
-        x4 = self.Att5(g=d5, x=x4)
-        d5 = torch.cat((x4, d5), dim=1)
-        d5 = self.Up_conv5(d5)
-
-        d4 = self.Up4(d5)
-        x3 = self.Att4(g=d4, x=x3)
-        d4 = torch.cat((x3, d4), dim=1)
-        d4 = self.Up_conv4(d4)
-
-        d3 = self.Up3(d4)
-        x2 = self.Att3(g=d3, x=x2)
-        d3 = torch.cat((x2, d3), dim=1)
-        d3 = self.Up_conv3(d3)
-
-        d2 = self.Up2(d3)
-        x1 = self.Att2(g=d2, x=x1)
-        d2 = torch.cat((x1, d2), dim=1)
-        d2 = self.Up_conv2(d2)
-
-        d1 = self.out(d2)
-
-        return d1
-
-
-class AttU_AvFeat_Net(nn.Module):
-
-    @staticmethod
-    def weight_init(m):
-        if isinstance(m, nn.Conv2d):
-            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
-            nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, nn.Conv3d):
-            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
-            nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, nn.Linear):
-            nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
-            nn.init.constant_(m.bias.data, 0)
-
-    def __init__(self, inp_ch, temporal_length, filter_size):
-        super(AttU_AvFeat_Net, self).__init__()
-
+        self.temporal_network = temporal_network
         self.temporal_length = temporal_length
-        self.AvFeat = AvFeat(filter_size=filter_size)
+
+        if 'avfeat' in self.temporal_network:
+            self.AvFeat = AvFeat(filter_size=filter_size)
+            inp_ch = inp_ch + filter_size
+
+        if 'tdr' in self.temporal_network:
+            self.TDR = TDR(inp_ch=temporal_length)
+            inp_ch = inp_ch + 1
 
         self.Maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
 
@@ -239,21 +163,33 @@ class AttU_AvFeat_Net(nn.Module):
         # Apply weight initialization
         self.apply(self.weight_init)
 
-    def forward(self, x):
+    def forward(self, inp):
 
         # Unsqueeze tensor and give temporal frames to temporal network(AvFeat)
-        with torch.no_grad():
-            # Get temporal frames
-            b, c, h, w = x.shape
-            temporal_network_first_index = c - self.temporal_length
-            temporal_patch = torch.tensor(x[:, temporal_network_first_index:],
-                                          dtype=torch.float).unsqueeze(dim=1)
-            curr_patch = torch.tensor(x[:, :temporal_network_first_index], dtype=torch.float)
+        if self.temporal_network != 'no':
+            with torch.no_grad():
+                # Get temporal frames
+                b, c, h, w = inp.shape
+                temporal_network_first_index = c - self.temporal_length
+                temporal_patch = torch.tensor(inp[:, temporal_network_first_index:],
+                                              dtype=torch.float).unsqueeze(dim=1)
+                curr_patch = torch.tensor(inp[:, :temporal_network_first_index], dtype=torch.float)
 
-        avfeat = self.AvFeat(temporal_patch)
+            if self.temporal_network == 'avfeat':
+                temporal_network_res = self.AvFeat(temporal_patch)
+            elif self.temporal_network == 'tdr':
+                temporal_network_res = self.TDR(temporal_patch.squeeze(dim=1))
+            elif self.temporal_network == 'avfeat_tdr':
+                avfeat = self.AvFeat(temporal_patch)
+                tdr = self.TDR(temporal_patch.squeeze(dim=1))
+                temporal_network_res = torch.cat((avfeat, tdr), dim=1)
+            else:
+                raise ValueError(f"temporal network = {self.temporal_network} is not defined")
+
+            inp = torch.cat((curr_patch, temporal_network_res), dim=1)
 
         # encoding path
-        x1 = self.Conv1(torch.cat((curr_patch, avfeat), dim=1))
+        x1 = self.Conv1(inp)
 
         x2 = self.Maxpool(x1)
         x2 = self.Conv2(x2)
@@ -293,7 +229,7 @@ class AttU_AvFeat_Net(nn.Module):
         return d1
 
 
-class R2AttU_AvFeat_Net(nn.Module):
+class R2AttU_Net(nn.Module):
 
     @staticmethod
     def weight_init(m):
@@ -307,11 +243,19 @@ class R2AttU_AvFeat_Net(nn.Module):
             nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
             nn.init.constant_(m.bias.data, 0)
 
-    def __init__(self, inp_ch=3, output_ch=1, temporal_length=50, filter_size=8, t=2):
-        super(R2AttU_AvFeat_Net, self).__init__()
+    def __init__(self, inp_ch, temporal_network, temporal_length, filter_size, t=2):
+        super(R2AttU_Net, self).__init__()
 
-        self.temporal_length = temporal_length
-        self.AvFeat = AvFeat(filter_size=filter_size)
+        self.temporal_network = temporal_network
+        self.temporal_length =temporal_length
+
+        if 'avfeat' in self.temporal_network:
+            self.AvFeat = AvFeat(filter_size=filter_size)
+            inp_ch = inp_ch + filter_size
+
+        if 'tdr' in self.temporal_network:
+            self.TDR = TDR(inp_ch=temporal_length)
+            inp_ch = inp_ch + 1
 
         self.Maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.Upsample = nn.Upsample(scale_factor=2)
@@ -347,21 +291,33 @@ class R2AttU_AvFeat_Net(nn.Module):
         # Apply weight initialization
         self.apply(self.weight_init)
 
-    def forward(self, x):
+    def forward(self, inp):
 
         # Unsqueeze tensor and give temporal frames to temporal network(AvFeat)
-        with torch.no_grad():
-            # Get temporal frames
-            b, c, h, w = x.shape
-            temporal_network_first_index = c - self.temporal_length
-            temporal_patch = torch.tensor(x[:, temporal_network_first_index:],
-                                          dtype=torch.float).unsqueeze(dim=1)
-            curr_patch = torch.tensor(x[:, :temporal_network_first_index], dtype=torch.float)
+        if self.temporal_network != 'no':
+            with torch.no_grad():
+                # Get temporal frames
+                b, c, h, w = inp.shape
+                temporal_network_first_index = c - self.temporal_length
+                temporal_patch = torch.tensor(inp[:, temporal_network_first_index:],
+                                              dtype=torch.float).unsqueeze(dim=1)
+                curr_patch = torch.tensor(inp[:, :temporal_network_first_index], dtype=torch.float)
 
-        avfeat = self.AvFeat(temporal_patch)
+            if self.temporal_network == 'avfeat':
+                temporal_network_res = self.AvFeat(temporal_patch)
+            elif self.temporal_network == 'tdr':
+                temporal_network_res = self.TDR(temporal_patch.squeeze(dim=1))
+            elif self.temporal_network == 'avfeat_tdr':
+                avfeat = self.AvFeat(temporal_patch)
+                tdr = self.TDR(temporal_patch.squeeze(dim=1))
+                temporal_network_res = torch.cat((avfeat, tdr), dim=1)
+            else:
+                raise ValueError(f"temporal network = {self.temporal_network} is not defined")
+
+            inp = torch.cat((curr_patch, temporal_network_res), dim=1)
 
         # encoding path
-        x1 = self.RRCNN1(torch.cat((curr_patch, avfeat), dim=1))
+        x1 = self.RRCNN1(inp)
 
         x2 = self.Maxpool(x1)
         x2 = self.RRCNN2(x2)

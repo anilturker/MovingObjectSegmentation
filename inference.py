@@ -14,21 +14,22 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='BSUV-Net-2.0 pyTorch')
     parser.add_argument('--network', metavar='Network', dest='network', type=str,
-                        default='R2AttU_temporal_network_attention_flux',
+                        default='R2AttU_temporal_network_attention_flux_without_median_bg_segmentation_ch',
                         help='Which network to use. unetvgg16, unet_attention, unet_attention_flux,'
                              'unet_no_empty_attention, unet_no_empty_attention_flux, unet_temporal_network_attention,'
                              'unet_temporal_network_attention_flux, unet_temporal_network, sparse_unet_flux'
-                             'R2AttU_temporal_network_attention_flux')
+                             'R2AttU_temporal_network_attention_flux'
+                             'R2AttU_temporal_network_attention_flux_without_median_bg_segmentation_ch')
 
     # Input images
     parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
                         help='Size of the inputs. If equals 0, use the original sized images. '
                              'Assumes square sized input')
-    parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='manual',
+    parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='no',
                         help='Which empty background to use? no, manual or automatic')
-    parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=1,
+    parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=0,
                         help='Use recent background frame as an input as well. 0 or 1')
-    parser.add_argument('--seg_ch', metavar='Segmentation', dest='seg_ch', type=int, default=1,
+    parser.add_argument('--seg_ch', metavar='Segmentation', dest='seg_ch', type=int, default=0,
                         help='Whether to use the FPM channel input or not. 0 or 1')
     parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=1,
                         help='Whether to use the flux tensor input or not. 0 or 1')
