@@ -81,6 +81,9 @@ class CDNet2014Loader(data.Dataset):
                 for fr_id in fr_ids:
                         input_tuples.append((cat, vid, fr_id))
 
+        if shuffle:
+            random.shuffle(input_tuples)
+
         self.input_tuples = input_tuples
         self.n_data = len(input_tuples)
         self.empty_bg = empty_bg
@@ -95,10 +98,8 @@ class CDNet2014Loader(data.Dataset):
         self.temporal_length = temporal_length
 
     def __getitem__(self, item):
-        if self.shuffle:
-            cat, vid, fr_id = random.choice(self.input_tuples)
-        else:
-            cat, vid, fr_id = self.input_tuples[item]
+
+        cat, vid, fr_id = self.input_tuples[item]
 
         # Construct the input
         inp = {"empty_bg_seg":None, "empty_bg":None,

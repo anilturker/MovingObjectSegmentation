@@ -25,6 +25,7 @@ import torchvision.transforms as tvtf
 import torch
 import numpy as np
 import cv2
+import matplotlib.pyplot as plt
 from utils import augmentations as aug
 from utils.data_loader import CDNet2014Loader
 
@@ -361,7 +362,7 @@ class RandomMask:
         self.debug = debug
 
     def __call__(self, cd_inp, cd_out):
-        if np.random.uniform() <= self.mask_prob:
+        if np.random.uniform() <= self.mask_prob + 1:
             if self.debug:
                 print("Applying Random Masking")
             sent_to_bg = np.random.randint(2)

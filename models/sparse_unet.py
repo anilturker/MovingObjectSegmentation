@@ -94,19 +94,21 @@ class FgNet(nn.Module):
                                               dtype=torch.float).unsqueeze(dim=1)
                 curr_patch = torch.tensor(inp[:, :temporal_network_first_index], dtype=torch.float)
 
-        if self.temporal_network == 'avfeat':
-            temporal_network_res = self.AvFeat(temporal_patch)
-        elif self.temporal_network == 'tdr':
-            temporal_network_res = self.TDR(temporal_patch.squeeze(dim=1))
-        elif self.temporal_network == 'avfeat_tdr':
-            avfeat = self.AvFeat(temporal_patch)
-            tdr = self.TDR(temporal_patch.squeeze(dim=1))
-            temporal_network_res = torch.cat((avfeat, tdr), dim=1)
-        else:
-            raise ValueError(f"temporal network = {self.temporal_network} is not defined")
+            if self.temporal_network == 'avfeat':
+                temporal_network_res = self.AvFeat(temporal_patch)
+            elif self.temporal_network == 'tdr':
+                temporal_network_res = self.TDR(temporal_patch.squeeze(dim=1))
+            elif self.temporal_network == 'avfeat_tdr':
+                avfeat = self.AvFeat(temporal_patch)
+                tdr = self.TDR(temporal_patch.squeeze(dim=1))
+                temporal_network_res = torch.cat((avfeat, tdr), dim=1)
+            else:
+                raise ValueError(f"temporal network = {self.temporal_network} is not defined")
+
+            inp = torch.cat((curr_patch, temporal_network_res), dim=1)
 
         # encoding path
-        e1 = self.enc1(torch.cat((curr_patch, temporal_network_res), dim=1))
+        e1 = self.enc1(inp)
         e2 = self.enc2(e1)
         d1 = self.dec1(e2)
         d2 = self.dec2(d1)

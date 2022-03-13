@@ -38,7 +38,7 @@ if __name__ == '__main__':
     parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
                         help='Size of the inputs. If equals 0, use the original sized images. '
                              'Assumes square sized input')
-    parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='manual',
+    parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='no',
                         help='Which empty background to use? no, manual or automatic')
     parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=0,
                         help='Use recent background frame as an input as well. 0 or 1')
@@ -74,9 +74,6 @@ if __name__ == '__main__':
     parser.add_argument('--aug_id', metavar='Data Augmentation for Illumination Difference', dest='aug_id', type=int,
                         default=1,
                         help='Whether to use Data Augmentation for Illumination Difference. 0 or 1')
-    parser.add_argument('--aug_ioa', metavar='Data Augmentation for Intermittent Object Addition', dest='aug_ioa',
-                        type=float, default=0.1,
-                        help='Probability of applying Intermittent Object Addition')
 
     # Temporal network parameters
     parser.add_argument('--temporal_history', metavar='Temporal History', dest='temporal_history', type=int,
@@ -127,7 +124,6 @@ if __name__ == '__main__':
     aug_rsc = args.aug_rsc
     aug_ptz = args.aug_ptz
     aug_id = args.aug_id
-    aug_ioa = args.aug_ioa
 
     model_chk = args.model_chk
     if model_chk == '':
@@ -173,39 +169,6 @@ if __name__ == '__main__':
     if aug_id:
         ill_global, std_ill_diff = (0.1, 0.04), (0.1, 0.04)
         additional_augs.append([aug.AdditiveRandomIllumation(ill_global, std_ill_diff)])
-
-    if aug_ioa > 0:
-        additional_augs_iom = []
-        if aug_id:
-            ill_global, std_ill_diff = (0.1, 0.04), (0.1, 0.04)
-            additional_augs_iom.append([aug.AdditiveRandomIllumation(ill_global, std_ill_diff)])
-
-        if aug_noise:
-            noise = 0.01
-            additional_augs_iom.append([aug.AdditiveNoise(noise)])
-
-        iom_dataset = {
-            'intermittentObjectMotion': dataset_tr['intermittentObjectMotion']
-        }
-        mask_transforms = [
-            [aug.RandomCrop(inp_size)],
-            *additional_augs_iom,
-        ]
-
-        dataloader_mask = CDNet2014Loader(
-            iom_dataset,
-            empty_bg=empty_bg,
-            use_flux_tensor=use_flux_tensor,
-            temporal_length=temporal_length,
-            recent_bg=recent_bg,
-            segmentation_ch=seg_ch,
-            transforms=mask_transforms,
-            multiplier=0,
-            shuffle=True
-        )
-
-        additional_augs.append([aug.RandomMask(inp_size, dataloader_mask, mask_prob=aug_ioa)])
-
     if aug_noise:
         noise = 0.01
         additional_augs.append([aug.AdditiveNoise(noise)])
