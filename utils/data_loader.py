@@ -15,8 +15,9 @@ class CDNet2014Loader(data.Dataset):
                                                 as keys and list of background frame ids as values
     """
 
-    def __init__(self, dataset, empty_bg="no", use_flux_tensor=False, empty_win_len=0, recent_bg=False, segmentation_ch=False,
-                 use_temporal_network=False, temporal_length = 50, use_selected=None, transforms=None, multiplier=16, shuffle=False):
+    def __init__(self, dataset, empty_bg="no", current_fr=1, use_flux_tensor=False, empty_win_len=0, recent_bg=False,
+                 patch_frame_size=0, segmentation_ch=False, use_temporal_network=False, temporal_length = 50,
+                 use_selected=None, transforms=None, multiplier=16, shuffle=False):
         """Initialization of data loader
         Args:
             :dataset (dict):                Dictionary of dataset. Keys are the categories (string),
@@ -24,11 +25,14 @@ class CDNet2014Loader(data.Dataset):
             :empty_bg (str):                'no': no empty background
                                             'manual': manually created empty background
                                             'automatic' : median of first k frames as empty background
+            :current_fr                     '0': no current frame
+                                            '1': use current frame
             :use_flux_tensor                'False' or 'True'
             :empty_win_length (int):        Number of initial frames for the median operation fro creating an empty
                                             background. Only used when empty_bg='automatic'.
                                             0 means median of all of the frames in the video
             :recent_bg (boolean):           Boolean for using the recent background frame
+            :patch_frame_size               The size of patch frame contains last n frame
             :segmentation_ch (boolean):     Boolean for using the segmentation maps
             :use_temporal_network(boolean): Boolean for using temporal network(AvFeat)
             :temporal_length(int):          Number of frames for temporal network(AvFeat)
@@ -87,6 +91,8 @@ class CDNet2014Loader(data.Dataset):
         self.input_tuples = input_tuples
         self.n_data = len(input_tuples)
         self.empty_bg = empty_bg
+        self.current_fr = current_fr
+        self.patch_frame_size = patch_frame_size
         self.use_flux_tensor = use_flux_tensor
         self.empty_win_len = empty_win_len
         self.recent_bg = recent_bg
@@ -131,6 +137,17 @@ class CDNet2014Loader(data.Dataset):
         if self.segmentation_ch and self.empty_bg != "no":
             inp["empty_bg_seg"] = self.__readGray(empty_bg_fpm_path)
 
+        if self.current_fr:
+            inp["current_fr"] = self.__readGray(data_config.current_fr_path\
+                                .format(cat=cat, vid=vid, fr_id=str(fr_id).zfill(6)))
+
+        if self.patch_frame_size:
+            for i, id in enumerate(range(fr_id - self.patch_frame_size + 1, fr_id + 1)):
+                temporal_frame = self.__readGray(data_config.current_fr_path\
+                                    .format(cat=cat, vid=vid, fr_id=str(id).zfill(6)))
+
+                inp["patch_frame_" + str(i)] = temporal_frame
+
         if self.segmentation_ch and self.recent_bg:
             inp["recent_bg_seg"] = self.__readGray(data_config.recent_bg_fpm_path\
                                        .format(cat=cat, vid=vid, fr_id=str(fr_id).zfill(6)))
@@ -142,15 +159,19 @@ class CDNet2014Loader(data.Dataset):
             inp["current_fr_seg"] = self.__readGray(data_config.current_fr_fpm_path\
                                         .format(cat=cat, vid=vid, fr_id=str(fr_id).zfill(6)))
 
-        inp["current_fr"] = self.__readGray(data_config.current_fr_path\
-                                .format(cat=cat, vid=vid, fr_id=str(fr_id).zfill(6)))
-
         label = self.__readGray(data_config.gt_path \
                                 .format(cat=cat, vid=vid, fr_id=str(fr_id).zfill(6)))
 
         if self.use_flux_tensor:
             inp["flux_tensor"] = self.__readGray(data_config.flux_tensor_path\
                                                  .format(cat=cat, vid=vid, fr_id=str(fr_id).zfill(6)))
+
+        if self.patch_frame_size:
+            for i, id in enumerate(range(fr_id - self.patch_frame_size + 1, fr_id + 1)):
+                temporal_frame = self.__readGray(data_config.current_fr_path\
+                                    .format(cat=cat, vid=vid, fr_id=str(id).zfill(6)))
+
+                inp["patch_frame_" + str(i)] = temporal_frame
 
         if self.use_temporal_network:
             for i, id in enumerate(range(fr_id-self.temporal_length+1, fr_id+1)):

@@ -425,7 +425,7 @@ class NormalizeTensor:
         segmentation_ch(bool): Bool for the usage of segmentation channel
     """
     def __init__(self, mean_rgb, mean_seg, std_rgb, std_seg, segmentation_ch=False,
-                 recent_bg=False, empty_bg=False, current_fr=False):
+                 recent_bg=False, empty_bg=False, current_fr=False, patch_frame_size=0):
         self.mean_rgb = mean_rgb
         self.std_rgb = std_rgb
         self.mean_seg = mean_seg
@@ -434,6 +434,7 @@ class NormalizeTensor:
         self.recent_bg = recent_bg
         self.empty_bg = empty_bg
         self.current_fr = current_fr
+        self.patch_frame_size = patch_frame_size
 
     def __call__(self, inp, out):
         """
@@ -454,7 +455,7 @@ class NormalizeTensor:
 
         c, h, w = inp.shape
 
-        normalized_frame = int(1*self.empty_bg + 1*self.recent_bg + 1*self.current_fr)
+        normalized_frame = int(1*self.empty_bg + 1*self.recent_bg + 1*self.current_fr + 1*self.patch_frame_size)
         normalized_channel_size = normalized_frame * (1 + 1*self.segmentation_ch)
 
         mean_vec = np.concatenate([mean_period for _ in range(normalized_frame)])

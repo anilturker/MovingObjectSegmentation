@@ -4,6 +4,7 @@ import argparse
 import os
 import configs.data_config as data_config
 import configs.full_cv_config as tr_test_config
+import configs.config_3x3_16_3x3_32_3x3_64 as model_config
 import torch
 import torch.optim as optim
 from utils import augmentations as aug
@@ -11,6 +12,8 @@ from utils.data_loader import CDNet2014Loader
 from utils import losses
 from models.unet import unet_vgg16
 from models.unet_attention import AttU_Net, R2AttU_Net
+from models.convlstm_network import SEnDec_cnn_lstm
+from models.ConvLSTM import ConvLSTM
 from models.sparse_unet import FgNet
 from tensorboardX import SummaryWriter
 
@@ -28,10 +31,10 @@ def print_debug(s):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='BSUV-Net-2.0 pyTorch')
-    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unetvgg16',
-                        help='Which network to use. unetvgg16, unet_attention, sparse_unet, R2AttU')
+    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='SEnDec_cnn_lstm',
+                        help='Which network to use. unetvgg16, unet_attention, sparse_unet, R2AttU, SEnDec_cnn_lstm')
 
-    parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network', default='avfeat_tdr',
+    parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network', default='no',
                         help='Which temporal network will use. no, avfeat, tdr, avfeat_tdr')
 
     # Input images
@@ -46,15 +49,18 @@ if __name__ == '__main__':
                         help='Whether to use the FPM channel input or not. 0 or 1')
     parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=0,
                         help='Whether to use the flux tensor input or not. 0 or 1')
-    parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=1,
-                        help='Whether to use the current frame or not. 0 or 1')
+    parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=0,
+                        help='Whether to use the current frame, 0 or 1')
+    parser.add_argument('--patch_frame_size', metavar='Patch frame size', dest='patch_frame_size', type=int, default=10,
+                        help='Whether to use the patch frame, last n th frame or not. 0, n: number of last frame')
+
 
     # Optimization
     parser.add_argument('--lr', metavar='Learning Rate', dest='lr', type=float, default=1e-4,
                         help='learning rate of the optimization')
     parser.add_argument('--weight_decay', metavar='weight_decay', dest='weight_decay', type=float, default=1e-2,
                         help='weight decay of the optimization')
-    parser.add_argument('--num_epochs', metavar='Number of epochs', dest='num_epochs', type=int, default=30,
+    parser.add_argument('--num_epochs', metavar='Number of epochs', dest='num_epochs', type=int, default=50,
                         help='Maximum number of epochs')
     parser.add_argument('--batch_size', metavar='Minibatch size', dest='batch_size', type=int, default=1,
                         help='Number of samples per minibatch')
@@ -82,7 +88,7 @@ if __name__ == '__main__':
                         default=8, help='Kernel size of temporal network')
 
     # Checkpoint
-    parser.add_argument('--model_chk', metavar='Checkpoint for the model', dest='model_chk', type=int, default=1,
+    parser.add_argument('--model_chk', metavar='Checkpoint for the model', dest='model_chk', type=int, default=0,
                         help='Whether to use checkpoint, 0 or 1')
 
     # Cross-validation
@@ -99,6 +105,7 @@ if __name__ == '__main__':
     temporal_network = args.temporal_network
     empty_bg = args.empty_bg
     current_fr = args.current_fr
+    patch_frame_size = args.patch_frame_size
     use_flux_tensor = args.flux_ch
     recent_bg = True if args.recent_bg == 1 else False
     seg_ch = True if args.seg_ch == 1 else False
@@ -184,7 +191,8 @@ if __name__ == '__main__':
         [aug.ToTensor()],
         [aug.NormalizeTensor(mean_rgb=mean_rgb, std_rgb=std_rgb,
                              mean_seg=mean_seg, std_seg=std_seg, segmentation_ch=seg_ch,
-                             recent_bg=recent_bg, empty_bg=(empty_bg != "no"), current_fr=current_fr)]
+                             recent_bg=recent_bg, empty_bg=(empty_bg != "no"), current_fr=current_fr,
+                             patch_frame_size=patch_frame_size)]
     ]
 
     transforms_test = [
@@ -192,16 +200,19 @@ if __name__ == '__main__':
         [aug.ToTensor()],
         [aug.NormalizeTensor(mean_rgb=mean_rgb, std_rgb=std_rgb,
                              mean_seg=mean_seg, std_seg=std_seg, segmentation_ch=seg_ch,
-                             recent_bg=recent_bg, empty_bg=(empty_bg != "no"), current_fr=current_fr)]
+                             recent_bg=recent_bg, empty_bg=(empty_bg != "no"), current_fr=current_fr,
+                             patch_frame_size=patch_frame_size)]
     ]
 
     dataloader_tr = CDNet2014Loader(
-        dataset_tr, empty_bg=empty_bg, use_flux_tensor=use_flux_tensor, recent_bg=recent_bg,
+        dataset_tr, empty_bg=empty_bg, current_fr=current_fr, patch_frame_size=patch_frame_size,
+        use_flux_tensor=use_flux_tensor, recent_bg=recent_bg,
         use_temporal_network=use_temporal_network, temporal_length=temporal_length, use_selected=200,
         segmentation_ch=seg_ch, transforms=transforms_tr, shuffle=True
     )
     dataloader_test = CDNet2014Loader(
-        dataset_test, empty_bg=empty_bg, use_flux_tensor=use_flux_tensor, recent_bg=recent_bg,
+        dataset_test, empty_bg=empty_bg, current_fr=current_fr, patch_frame_size=patch_frame_size,
+        use_flux_tensor=use_flux_tensor, recent_bg=recent_bg,
         use_temporal_network=use_temporal_network, temporal_length=temporal_length, use_selected=200,
         segmentation_ch=seg_ch, transforms=transforms_test, shuffle=True
     )
@@ -215,7 +226,7 @@ if __name__ == '__main__':
 
     # load model
     num_ch_per_inp = (1 + (1 * seg_ch))
-    num_inp = ((1 * (empty_bg != "no")) + (1 * recent_bg) + 1)
+    num_inp = (1 * (empty_bg != "no")) + (1 * recent_bg) + 1 * current_fr + (1 * (patch_frame_size != 0))
     num_ch = num_inp * num_ch_per_inp + 1 * (use_flux_tensor == True)
 
     if network == "unetvgg16":
@@ -230,6 +241,9 @@ if __name__ == '__main__':
     elif network.startswith('R2AttU'):
         model = R2AttU_Net(inp_ch=num_ch, temporal_network=temporal_network, temporal_length=temporal_length,
                          filter_size=temporal_kernel_size)
+    elif network.startswith('SEnDec_cnn_lstm'):
+        model = SEnDec_cnn_lstm(inp_ch=num_ch, patch_frame_size=patch_frame_size)
+
     else:
         raise ValueError(f"network = {network} is not defined")
 
