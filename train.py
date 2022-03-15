@@ -4,7 +4,6 @@ import argparse
 import os
 import configs.data_config as data_config
 import configs.full_cv_config as tr_test_config
-import configs.config_3x3_16_3x3_32_3x3_64 as model_config
 import torch
 import torch.optim as optim
 from utils import augmentations as aug
@@ -13,7 +12,6 @@ from utils import losses
 from models.unet import unet_vgg16
 from models.unet_attention import AttU_Net, R2AttU_Net
 from models.convlstm_network import SEnDec_cnn_lstm
-from models.ConvLSTM import ConvLSTM
 from models.sparse_unet import FgNet
 from tensorboardX import SummaryWriter
 

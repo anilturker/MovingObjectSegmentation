@@ -99,35 +99,47 @@ class ConvLSTMBlock(nn.Module):
 
 class SEnDec_cnn_lstm(nn.Module):
 
+	@staticmethod
+	def weight_init(m):
+		if isinstance(m, nn.Conv2d):
+			nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+			nn.init.constant_(m.bias.data, 0)
+		elif isinstance(m, nn.Conv3d):
+			nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+			nn.init.constant_(m.bias.data, 0)
+		elif isinstance(m, nn.Linear):
+			nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
+			nn.init.constant_(m.bias.data, 0)
+
 	def __init__(self, inp_ch,patch_frame_size):
 		super(SEnDec_cnn_lstm, self).__init__()
 
 		self.patch_frame_size = patch_frame_size
 		self.seq0 = Conv_block_3d(inp_ch, ch_out=16, batch_norm=False, activation=nn.ReLU(),
-							 kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1))
+							 kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1))
 
 		# - SEnDec block 1
 		self.seq1 = Sendec_block(16, ch_out=16)
 
 		self.seq13 = Conv_block_3d(16, ch_out=32, batch_norm=False, activation=nn.ReLU(),
-							 kernel_size=(1, 3, 3), stride=(1, 2, 2), padding=(0, 1, 1))
+							 kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=(1, 1, 1))
 
 		# - SEnDec block 2
 		self.seq2 = Sendec_block(32, ch_out=16)
 
 		self.seq22_conv = Conv_block_3d(16, ch_out=32, batch_norm=False, activation=nn.ReLU(),
-							 kernel_size=(1, 3, 3), stride=(1, 2, 2), padding=(0, 1, 1))
+							 kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=(1, 1, 1))
 
 		# - SEnDec block 3
 		self.seq3 = Sendec_block(32, ch_out=16)
 
 		self.seq3_conv = Conv_block_3d(16, ch_out=32, batch_norm=False, activation=nn.ReLU(),
-							 kernel_size=(1, 3, 3), stride=(1, 2, 2), padding=(0, 1, 1))
+							 kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=(1, 1, 1))
 
 		self.seq4 = ConvLSTMBlock(32, 16, kernel_size=3, padding=1)
 
 		self.seq5 = Conv_block_3d(16, ch_out=16, batch_norm=False, activation=nn.ReLU(),
-							 kernel_size=(1, 3, 3), stride=(1, 2, 2), padding=(0, 1, 1))
+							 kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=(1, 1, 1))
 
 		#-~~~~~~~~~~~~~~~~~~ Upsampling ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -135,25 +147,25 @@ class SEnDec_cnn_lstm(nn.Module):
 
 		ch_in = 32 + 16
 		self.seq6_conv = Conv_block_3d(ch_in, ch_out=32, batch_norm=True, activation=nn.ReLU(),
-							 kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1))
+							 kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1))
 
 		self.seq7_transpose = nn.ConvTranspose3d(32, 16, kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=(1, 1, 1))
 
 		ch_in = 32 + 16
 		self.seq7_conv = Conv_block_3d(ch_in, ch_out=32, batch_norm=True, activation=nn.ReLU(),
-							 kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1))
+							 kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1))
 
 		self.seq8_transpose = nn.ConvTranspose3d(32, 16, kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=(1, 1, 1))
 
 		ch_in = 32 + 16
 		self.seq8_conv = Conv_block_3d(ch_in, ch_out=32, batch_norm=True, activation=nn.ReLU(),
-							 kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1))
+							 kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1))
 
 		self.seq9_transpose = nn.ConvTranspose3d(32, 16, kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=(1, 1, 1))
 
 		ch_in = 16 + 16
 		self.seq9_conv = Conv_block_3d(ch_in, ch_out=32, batch_norm=True, activation=nn.ReLU(),
-							 kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1))
+							 kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1))
 
 		self.seq10 = ConvLSTMBlock(32, 16, kernel_size=3, padding=1)
 		self.seq11 = Conv_block_3d(16, ch_out=16, batch_norm=False, activation=nn.ReLU(),
