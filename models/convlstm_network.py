@@ -115,30 +115,30 @@ class SEnDec_cnn_lstm(nn.Module):
 		super(SEnDec_cnn_lstm, self).__init__()
 
 		self.patch_frame_size = patch_frame_size
-		self.seq0 = Conv_block_3d(inp_ch, ch_out=16, batch_norm=False, activation=nn.ReLU(),
+		self.seq0 = Conv_block_3d(inp_ch, ch_out=16, batch_norm=True, activation=nn.ReLU(),
 							 kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1))
 
 		# - SEnDec block 1
 		self.seq1 = Sendec_block(16, ch_out=16)
 
-		self.seq13 = Conv_block_3d(16, ch_out=32, batch_norm=False, activation=nn.ReLU(),
+		self.seq13 = Conv_block_3d(16, ch_out=32, batch_norm=True, activation=nn.ReLU(),
 							 kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=(1, 1, 1))
 
 		# - SEnDec block 2
 		self.seq2 = Sendec_block(32, ch_out=16)
 
-		self.seq22_conv = Conv_block_3d(16, ch_out=32, batch_norm=False, activation=nn.ReLU(),
+		self.seq22_conv = Conv_block_3d(16, ch_out=32, batch_norm=True, activation=nn.ReLU(),
 							 kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=(1, 1, 1))
 
 		# - SEnDec block 3
 		self.seq3 = Sendec_block(32, ch_out=16)
 
-		self.seq3_conv = Conv_block_3d(16, ch_out=32, batch_norm=False, activation=nn.ReLU(),
+		self.seq3_conv = Conv_block_3d(16, ch_out=32, batch_norm=True, activation=nn.ReLU(),
 							 kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=(1, 1, 1))
 
 		self.seq4 = ConvLSTMBlock(32, 16, kernel_size=3, padding=1)
 
-		self.seq5 = Conv_block_3d(16, ch_out=16, batch_norm=False, activation=nn.ReLU(),
+		self.seq5 = Conv_block_3d(16, ch_out=16, batch_norm=True, activation=nn.ReLU(),
 							 kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=(1, 1, 1))
 
 		#-~~~~~~~~~~~~~~~~~~ Upsampling ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -168,10 +168,10 @@ class SEnDec_cnn_lstm(nn.Module):
 							 kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1))
 
 		self.seq10 = ConvLSTMBlock(32, 16, kernel_size=3, padding=1)
-		self.seq11 = Conv_block_3d(16, ch_out=16, batch_norm=False, activation=nn.ReLU(),
+		self.seq11 = Conv_block_3d(16, ch_out=16, batch_norm=True, activation=nn.ReLU(),
 							 kernel_size=(3, 3, 3), stride=(2, 1, 1), padding=(0, 1, 1))
 
-		self.seq12 = Conv_block_3d(16, ch_out=16, batch_norm=False, activation=nn.ReLU(),
+		self.seq12 = Conv_block_3d(16, ch_out=16, batch_norm=True, activation=nn.ReLU(),
 								   kernel_size=(3, 3, 3), stride=(2, 1, 1), padding=(0, 1, 1))
 
 		self.out = Conv_block_3d(16, ch_out=1, batch_norm=True, activation=nn.Sigmoid(),

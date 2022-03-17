@@ -65,6 +65,17 @@ datasets_tr = {
         'lowFramerate':['port_0_17fps'],
         'intermittentObjectMotion':['streetLight']
         }, # small dataset for quick debugging
+    6: {'baseline': ['pedestrians', 'office', 'PETS2006'],
+        'cameraJitter': ['traffic', 'boulevard', 'sidewalk'],
+        'badWeather': ['skating', 'snowFall', 'wetSnow'],
+        'dynamicBackground': ['boats', 'canoe', 'fall', 'fountain01'],
+        'intermittentObjectMotion': ['abandonedBox', 'parking', 'streetLight', 'tramstop', 'winterDriveway'],
+        'lowFramerate': ['tramCrossroad_1fps', 'tunnelExit_0_35fps', 'turnpike_0_5fps'],
+        'nightVideos': ['fluidHighway', 'streetCornerAtNight', 'tramStation', 'winterStreet'],
+        'shadow': ['backdoor', 'bungalows', 'cubicle', 'peopleInShade'],
+        'thermal': ['diningRoom', 'library', 'park'],
+        'turbulence': ['turbulence1', 'turbulence2', 'turbulence3']
+        },  # CV fold 5(without PTZ and copyMachine)
 }
 
 datasets_test = {
@@ -119,4 +130,15 @@ datasets_test = {
     5: {
          'lowFramerate':['port_0_17fps']
         }, # small dataset for quick debugging
+    6: {'baseline': ['highway'],
+        'cameraJitter': ['badminton'],
+        'badWeather': ['blizzard'],
+        'dynamicBackground': ['fountain02', 'overpass'],
+        'intermittentObjectMotion': ['sofa'],
+        'lowFramerate': ['port_0_17fps'],
+        'nightVideos': ['bridgeEntry', 'busyBoulvard'],
+        'shadow': ['busStation'],
+        'thermal': ['corridor', 'lakeSide', ],
+        'turbulence': ['turbulence0']
+        },
 }

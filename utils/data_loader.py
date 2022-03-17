@@ -108,9 +108,9 @@ class CDNet2014Loader(data.Dataset):
         cat, vid, fr_id = self.input_tuples[item]
 
         # Construct the input
-        inp = {"empty_bg_seg":None, "empty_bg":None,
-               "recent_bg_seg":None, "recent_bg":None,
-               "current_fr_seg":None, "current_fr":None}
+        inp = {"current_fr":None, "current_fr_seg":None,
+               "empty_bg_seg":None, "empty_bg":None,
+               "recent_bg_seg":None, "recent_bg":None}
 
         if self.empty_bg == "manual":
             empty_bg_path = data_config.empty_bg_path.format(

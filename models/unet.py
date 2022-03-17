@@ -4,7 +4,7 @@
 import torch
 import torch.nn as nn
 from models.unet_tools import UNetDown, UNetUp, ConvSig
-from models.temporal_networks import AvFeat, TDR
+from models.temporal_networks import AvFeat, TDR, ConFeat
 
 class unet_vgg16(nn.Module):
     """
@@ -31,6 +31,10 @@ class unet_vgg16(nn.Module):
 
         if 'avfeat' in self.temporal_network:
             self.AvFeat = AvFeat(filter_size=filter_size)
+            inp_ch = inp_ch + filter_size
+
+        if 'confeat' in self.temporal_network:
+            self.ConFeat = ConFeat(filter_size=filter_size)
             inp_ch = inp_ch + filter_size
 
         if 'tdr' in self.temporal_network:
@@ -77,6 +81,11 @@ class unet_vgg16(nn.Module):
                 temporal_network_res = self.AvFeat(temporal_patch)
             elif self.temporal_network == 'tdr':
                 temporal_network_res = self.TDR(temporal_patch.squeeze(dim=1))
+            elif self.temporal_network == "avfeat_confeat":
+                avfeat = self.AvFeat(temporal_patch)
+                confeat = self.ConFeat(temporal_patch[:, :, -1, :, :].unsqueeze(dim=1)) # give current frame to network
+                temporal_network_res = torch.cat((avfeat, confeat), dim=1)
+
             elif self.temporal_network == 'avfeat_tdr':
                 avfeat = self.AvFeat(temporal_patch)
                 tdr = self.TDR(temporal_patch.squeeze(dim=1))

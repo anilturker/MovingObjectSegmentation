@@ -455,17 +455,17 @@ class NormalizeTensor:
 
         c, h, w = inp.shape
 
-        normalized_frame = int(1*self.empty_bg + 1*self.recent_bg + 1*self.current_fr + 1*self.patch_frame_size)
-        normalized_channel_size = normalized_frame * (1 + 1*self.segmentation_ch)
+        normalized_curr_frame = int(1*self.empty_bg + 1*self.recent_bg + 1*self.current_fr)
 
-        mean_vec = np.concatenate([mean_period for _ in range(normalized_frame)])
-        std_vec = np.concatenate([std_period for _ in range(normalized_frame)])
+        mean_vec = np.concatenate([mean_period for _ in range(normalized_curr_frame)]
+                                 + [self.mean_rgb for _ in range(c - normalized_curr_frame)])
+        std_vec = np.concatenate([std_period for _ in range(normalized_curr_frame)]
+                                 + [self.std_rgb for _ in range(c - normalized_curr_frame)])
 
-        inp_n = tvtf.Normalize(mean_vec, std_vec)(inp[:normalized_channel_size])
-        if c > normalized_channel_size:
-            inp_n = torch.cat((inp_n, inp[normalized_channel_size:]), dim=0)
+        inp = tvtf.Normalize(mean_vec, std_vec)(inp)
 
-        return inp_n, out
+        return inp, out
+
 
 def _centerCrop(im, w_, h_):
     """

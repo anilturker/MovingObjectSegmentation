@@ -48,7 +48,7 @@ class AvFeat(nn.Module):
 
     def __init__(self, filter_size):
         super().__init__()
-        self.conv1_5x5 = conv_block_3d(1, filter_size, kernel_size=(3, 3, 3), stride=(5, 1, 1), padding=(0, 1, 1))
+        self.conv1_5x5 = conv_block_3d(1, filter_size, kernel_size=(3, 5, 5), stride=(5, 1, 1), padding=(0, 2, 2))
         self.conv1_3x3 = conv_block_3d(1, filter_size, kernel_size=(3, 3, 3), stride=(5, 1, 1), padding=(0, 1, 1))
         self.conv1_1x1 = conv_block_3d(1, filter_size, kernel_size=(3, 1, 1), stride=(5, 1, 1), padding=0)
 
@@ -71,22 +71,31 @@ class AvFeat(nn.Module):
         x1_2 = self.conv1_3x3(inp)
         x1_3 = self.conv1_1x1(inp)
 
+        """
         fused1 = torch.cat((x1_1, x1_2, x1_3), dim=1)
         fused1 = self.conv1_avg_1x1(fused1)
+        """
+        fused1 = (x1_1 + x1_2 + x1_3) / 3
 
         x2_1 = self.conv2_5x5(fused1)
         x2_2 = self.conv2_3x3(fused1)
         x2_3 = self.conv2_1x1(fused1)
 
+        """
         fused2 = torch.cat((x2_1, x2_2, x2_3), dim=1)
         fused2 = self.conv2_avg_1x1(fused2)
+        """
+        fused2 = (x2_1 + x2_2 + x2_3) / 3
 
         x3_1 = self.conv3_5x5(fused2)
         x3_2 = self.conv3_3x3(fused2)
         x3_3 = self.conv3_1x1(fused2)
 
+        """
         fused3 = torch.cat((x3_1, x3_2, x3_3), dim=1)
         fused3 = self.conv3_avg_1x1(fused3)
+        """
+        fused3 = (x3_1 + x3_2 + x3_3) / 3
 
         # 5D to 4D tensor
         with torch.no_grad():
@@ -94,6 +103,41 @@ class AvFeat(nn.Module):
 
         return out
 
+
+class ConFeat(nn.Module):
+
+    @staticmethod
+    def weight_init(m):
+        if isinstance(m, nn.Conv2d):
+            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+            nn.init.constant_(m.bias.data, 0)
+        elif isinstance(m, nn.Conv3d):
+            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+            nn.init.constant_(m.bias.data, 0)
+        elif isinstance(m, nn.Linear):
+            nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
+            nn.init.constant_(m.bias.data, 0)
+
+    def __init__(self, filter_size):
+        super().__init__()
+
+        self.conv1_5x5 = conv_block_3d(1, filter_size, kernel_size=(1, 5, 5), stride=(1, 1, 1), padding=(0, 2, 2))
+        self.conv1_3x3 = conv_block_3d(1, filter_size, kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1))
+        self.conv1_1x1 = conv_block_3d(1, filter_size, kernel_size=(1, 1, 1), stride=(1, 1, 1), padding=0)
+
+    def forward(self, inp):
+
+        x1_1 = self.conv1_5x5(inp)
+        x1_2 = self.conv1_3x3(inp)
+        x1_3 = self.conv1_1x1(inp)
+
+        x = (x1_1 + x1_2 + x1_3) / 3
+
+        # 5D to 4D tensor
+        with torch.no_grad():
+            out = x.squeeze(dim=2)
+
+        return out
 
 class TDR(nn.Module):
 
