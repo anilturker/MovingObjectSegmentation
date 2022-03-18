@@ -49,7 +49,7 @@ if __name__ == '__main__':
 
     # Cross-validation
     parser.add_argument('--set_number', metavar='Which training-test split to use from config file', dest='set_number',
-                        type=int, default=[1], help='Training and test videos will be selected based on the set number')
+                        type=int, default=[6], help='Training and test videos will be selected based on the set number')
 
     # Model name
     parser.add_argument('--model_name', metavar='Name of the model for log keeping', dest='model_name',

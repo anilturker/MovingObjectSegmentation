@@ -111,10 +111,10 @@ class SEnDec_cnn_lstm(nn.Module):
 			nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
 			nn.init.constant_(m.bias.data, 0)
 
-	def __init__(self, inp_ch,patch_frame_size):
+	def __init__(self, inp_ch=1):
 		super(SEnDec_cnn_lstm, self).__init__()
 
-		self.patch_frame_size = patch_frame_size
+
 		self.seq0 = Conv_block_3d(inp_ch, ch_out=16, batch_norm=True, activation=nn.ReLU(),
 							 kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1))
 
@@ -168,22 +168,17 @@ class SEnDec_cnn_lstm(nn.Module):
 							 kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1))
 
 		self.seq10 = ConvLSTMBlock(32, 16, kernel_size=3, padding=1)
-		self.seq11 = Conv_block_3d(16, ch_out=16, batch_norm=True, activation=nn.ReLU(),
-							 kernel_size=(3, 3, 3), stride=(2, 1, 1), padding=(0, 1, 1))
-
-		self.seq12 = Conv_block_3d(16, ch_out=16, batch_norm=True, activation=nn.ReLU(),
-								   kernel_size=(3, 3, 3), stride=(2, 1, 1), padding=(0, 1, 1))
 
 		self.out = Conv_block_3d(16, ch_out=1, batch_norm=True, activation=nn.Sigmoid(),
 							 kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1))
 
 	def forward(self, inp):
 
-		# Unsqueeze tensor
+		# 4D to 5D
 		with torch.no_grad():
-			temporal_patch = torch.tensor(inp, dtype=torch.float).unsqueeze(dim=1)
+			inp = torch.tensor(inp, dtype=torch.float).unsqueeze(dim=1)
 
-		seq0 = self.seq0(temporal_patch)
+		seq0 = self.seq0(inp)
 		seq1, seq12 = self.seq1(seq0)
 		seq13 = self.seq13(seq12)
 
@@ -219,9 +214,27 @@ class SEnDec_cnn_lstm(nn.Module):
 		seq9 = self.seq9_conv(seq9)
 
 		seq10 = self.seq10(seq9)
-		seq11 = self.seq11(seq10)
-		seq12 = self.seq12(seq11)
 
-		out = self.out(seq12)
+		# Channel averaging
+		avg = torch.mean(seq10, dim=2).unsqueeze(dim=2)
+
+		out = self.out(avg)
 
 		return out
+
+
+if __name__ == '__main__':
+	import time
+	import torch
+	from torch.autograd import Variable
+	from torchsummaryX import summary
+
+	torch.cuda.set_device(0)
+	net =SEnDec_cnn_lstm(inp_ch=1).cuda().eval()
+
+	data = Variable(torch.randn(1, 1, 16, 112, 112)).cuda()
+
+	out = net(data)
+
+	summary(net,data)
+	print("out size: {}".format(out.size()))

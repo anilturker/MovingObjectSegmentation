@@ -31,7 +31,7 @@ if __name__ == '__main__':
     parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unetvgg16',
                         help='Which network to use. unetvgg16, unet_attention, unet3d, sparse_unet, R2AttU, SEnDec_cnn_lstm')
 
-    parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network', default='avfeat_confeat',
+    parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network', default='avfeat_confeat_tdr',
                         help='Which temporal network will use. no, avfeat, tdr, avfeat_confeat, avfeat_confeat_tdr, avfeat')
 
     # Input images
@@ -62,7 +62,8 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', metavar='Minibatch size', dest='batch_size', type=int, default=1,
                         help='Number of samples per minibatch')
     parser.add_argument('--loss', metavar='Loss function to be used', dest='loss', type=str, default='jaccard',
-                        help='Loss function to be used ce for cross-entropy or jaccard for Jaccard index')
+                        help='Loss function to be used ce for cross-entropy, focal-loss, tversky-loss'
+                             ' or jaccard for Jaccard index')
     parser.add_argument('--opt', metavar='Optimizer to be used', dest='opt', type=str, default='adam',
                         help='sgd, rmsprop or adam')
 
@@ -183,6 +184,11 @@ if __name__ == '__main__':
     mean_seg = [x for x in [0.5]]
     std_seg = [x for x in [0.5]]
 
+    num_ch_per_inp = (1 + (1 * seg_ch))
+    num_inp = (1 * (empty_bg != "no")) + (1 * recent_bg) + 1 * current_fr + (1 * (patch_frame_size != 0))
+    num_ch = num_inp * num_ch_per_inp + 1 * (use_flux_tensor == True)
+
+
     transforms_tr = [
         crop_and_aug,
         *additional_augs,
@@ -223,10 +229,6 @@ if __name__ == '__main__':
     )
 
     # load model
-    num_ch_per_inp = (1 + (1 * seg_ch))
-    num_inp = (1 * (empty_bg != "no")) + (1 * recent_bg) + 1 * current_fr + (1 * (patch_frame_size != 0))
-    num_ch = num_inp * num_ch_per_inp + 1 * (use_flux_tensor == True)
-
     if network == "unetvgg16":
         model = unet_vgg16(inp_ch=num_ch, kernel_size=3, skip=1, temporal_network=temporal_network,
                            temporal_length=temporal_length, filter_size=temporal_kernel_size)
@@ -240,7 +242,7 @@ if __name__ == '__main__':
         model = R2AttU_Net(inp_ch=num_ch, temporal_network=temporal_network, temporal_length=temporal_length,
                          filter_size=temporal_kernel_size)
     elif network.startswith('SEnDec_cnn_lstm'):
-        model = SEnDec_cnn_lstm(inp_ch=num_ch, patch_frame_size=patch_frame_size)
+        model = SEnDec_cnn_lstm(inp_ch=1)  # inp_ch is 3 if rgb input else 1
 
     else:
         raise ValueError(f"network = {network} is not defined")
@@ -258,8 +260,14 @@ if __name__ == '__main__':
 
     if loss == "jaccard":
         loss_func = losses.jaccard_loss
+    elif loss == "ce":
+        loss_func = losses.binary_cross_entropy_loss
+    elif loss == "focal-loss":
+        loss_func = losses.binary_focal_loss
+    elif loss == "tversky-loss":
+        loss_func = losses.tverskyLoss_bce_loss
     else:
-        raise ("loss=%s is not defined, please choose from ('jaccard')." % opt)
+        raise ("loss=%s is not defined, please choose from ('jaccard', 'ce', 'focal-loss', 'tversky-loss')." % opt)
 
     # Print model's state_dict
     print_debug("Model's state_dict:")
@@ -276,17 +284,18 @@ if __name__ == '__main__':
             print(f"=> loading checkpoint '{model_chk}'")
             checkpoint = torch.load(chk_path)
             start_epoch = checkpoint['epoch']
+            best_f = checkpoint['best_f']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(model_chk, checkpoint['epoch']))
         else:
+            best_f = 0.0
             start_epoch = 0
     else:
         start_epoch = 0
 
     # training
-    best_f = 0.0
     epoch_loss = 0.0 # For saving the best model
     epoch_acc = 0.0
     epoch_f = 0.0
@@ -313,6 +322,8 @@ if __name__ == '__main__':
                         inputs, labels = inputs.cuda(), labels.cuda()
                     outputs = model(inputs)
                     labels_1d, outputs_1d = losses.getValid(labels, outputs)
+                    if len(labels_1d) == 0 or len(outputs_1d) == 0:
+                        continue
                     loss = loss_func(labels_1d, outputs_1d)
                     loss.backward()
                     optimizer.step()
@@ -337,7 +348,7 @@ if __name__ == '__main__':
 
                 del inputs, labels, outputs, labels_1d, outputs_1d
                 if (i + 1) % 100 == 0:  # print every 2000 mini-batches
-                    print("::%s::[%d, %5d] loss: %.1f, acc: %.3f, f_score: %.3f" %
+                    print("::%s::[%d, %5d] loss: %.3f, acc: %.3f, f_score: %.3f" %
                           (phase, epoch + 1, i + 1,
                            running_loss / (i + 1), running_acc / (i + 1), running_f / (i + 1)))
 
@@ -346,7 +357,7 @@ if __name__ == '__main__':
             epoch_f = running_f / len(tensorloader)
 
             current_lr = lr
-            print("::%s:: Epoch %d loss: %.1f, acc: %.3f, f_score: %.3f, lr x 1000: %.4f, elapsed time: %s" \
+            print("::%s:: Epoch %d loss: %.3f, acc: %.3f, f_score: %.3f, lr x 1000: %.4f, elapsed time: %s" \
                   % (phase, epoch + 1, epoch_loss, epoch_acc, epoch_f, current_lr * 1000, (time.time() - st)))
 
             writer.add_scalar(f"{phase}/loss", epoch_loss, epoch)
@@ -362,6 +373,7 @@ if __name__ == '__main__':
             # Save the checkpoint
             checkpoint = {
                 "epoch": epoch + 1,
+                "best_f": best_f,
                 "state_dict": model.state_dict(),
                 "optimizer": optimizer.state_dict()
             }

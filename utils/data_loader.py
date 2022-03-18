@@ -173,6 +173,7 @@ class CDNet2014Loader(data.Dataset):
 
                 inp["patch_frame_" + str(i)] = temporal_frame
 
+
         if self.use_temporal_network:
             for i, id in enumerate(range(fr_id-self.temporal_length+1, fr_id+1)):
                 temporal_frame = self.__readGray(data_config.current_fr_path\

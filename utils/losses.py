@@ -2,7 +2,6 @@
 """
 
 import torch
-
 from torch.nn import functional as F
 
 
@@ -28,6 +27,14 @@ def getValid(true, pred, nonvalid=-1):
     # Discard the unknown parts from the predictions and labels
     return torch.masked_select(true_valid, mask), torch.masked_select(pred_valid, mask)
 
+
+def binary_cross_entropy_loss(true, pred, smooth=100):
+
+    bce = F.binary_cross_entropy_with_logits(pred, true).clamp(0, 1)
+    loss = bce * smooth
+    return loss
+
+
 def jaccard_loss(true, pred, smooth=100):
     """Computes the Jaccard loss, a.k.a the IoU loss.
     Jaccard = (|X & Y|)/ (|X|+ |Y| - |X & Y|)
@@ -45,6 +52,58 @@ def jaccard_loss(true, pred, smooth=100):
     intersection = torch.sum(true*pred)
     jac = (intersection + smooth) / (torch.sum(true) + torch.sum(pred) - intersection + smooth)
     return (1 - jac) * smooth
+
+
+# tversky loss
+def tverskyLoss(true, pred, alpha=0.3, beta=0.7, smooth=100):
+    pred = pred.contiguous()
+    true = true.contiguous()
+
+    TP = torch.sum(pred * true)
+    FP = torch.sum((1 - true) * pred)
+    FN = torch.sum(true * (1 - pred))
+
+    loss = (TP + smooth) / (TP + alpha * FP + beta * FN + smooth)
+    loss = (1 - loss) * smooth
+
+    return loss
+
+
+# calculate overall loss
+def tverskyLoss_bce_loss(true, pred, bceWeight=0.5, alpha=0.3, beta=0.7, smooth=100):
+    bce = binary_cross_entropy_loss(pred, true, smooth)
+    tversky = tverskyLoss(pred, true, alpha, beta, smooth)
+
+    loss = bce * bceWeight + tversky * (1 - bceWeight)
+
+    return loss
+
+def binary_focal_loss(true, pred, alpha=3.0, gamma=2.0, **kwargs):
+    """
+    This is a implementation of Focal Loss with smooth label cross entropy supported which is proposed in
+    'Focal Loss for Dense Object Detection. (https://arxiv.org/abs/1708.02002)'
+        Focal_Loss= -1*alpha*(1-pt)*log(pt)
+    :param alpha: (tensor) 3D or 4D the scalar factor for this criterion
+    :param gamma: (float,double) gamma > 0 reduces the relative loss for well-classified examples (p>0.5) putting more
+                    focus on hard misclassified example
+    :param reduction: `none`|`mean`|`sum`
+    :param **kwargs
+        balance_index: (int) balance class index, should be specific when alpha is float
+    """
+    pred = torch.clamp(pred, 0, 1.0)
+
+    pos_mask = (true == 1).float()
+    neg_mask = (true == 0).float()
+
+    pos_weight = (pos_mask * torch.pow(1 - pred, gamma)).detach()
+    pos_loss = -pos_weight * torch.log(pred)  # / (torch.sum(pos_weight) + 1e-4)
+
+    neg_weight = (neg_mask * torch.pow(pred, gamma)).detach()
+    neg_loss = -alpha * neg_weight * F.logsigmoid(-pred)  # / (torch.sum(neg_weight) + 1e-4)
+    loss = pos_loss + neg_loss
+    loss = loss.mean()
+
+    return loss
 
 def weighted_crossentropy(true, pred, weight_pos=15, weight_neg=1):
     """Weighted cross entropy between ground truth and predictions
