@@ -65,17 +65,17 @@ datasets_tr = {
         'lowFramerate':['port_0_17fps'],
         'intermittentObjectMotion':['streetLight']
         }, # small dataset for quick debugging
-    6: {'baseline': ['pedestrians', 'office', 'PETS2006'],
-        'cameraJitter': ['traffic', 'boulevard', 'sidewalk'],
-        'badWeather': ['skating', 'snowFall', 'wetSnow'],
-        'dynamicBackground': ['boats', 'canoe', 'fall', 'fountain01'],
-        'intermittentObjectMotion': ['abandonedBox', 'parking', 'streetLight', 'tramstop', 'winterDriveway'],
-        'lowFramerate': ['tramCrossroad_1fps', 'tunnelExit_0_35fps', 'turnpike_0_5fps'],
-        'nightVideos': ['fluidHighway', 'streetCornerAtNight', 'tramStation', 'winterStreet'],
-        'shadow': ['backdoor', 'bungalows', 'cubicle', 'peopleInShade'],
-        'thermal': ['diningRoom', 'library', 'park'],
-        'turbulence': ['turbulence1', 'turbulence2', 'turbulence3']
-        },  # CV fold 5(without PTZ and copyMachine)
+    6: {'baseline':['highway', 'office', 'PETS2006'],
+        'cameraJitter':['badminton', 'boulevard', 'sidewalk'],
+        'badWeather':['skating', 'snowFall', 'wetSnow'],
+        'dynamicBackground':['canoe', 'fall', 'fountain01', 'fountain02', 'overpass'],
+        'intermittentObjectMotion':['abandonedBox', 'sofa', 'streetLight', 'tramstop', 'winterDriveway'],
+        'lowFramerate':['port_0_17fps', 'tramCrossroad_1fps', 'tunnelExit_0_35fps'],
+        'nightVideos':['bridgeEntry', 'busyBoulvard', 'fluidHighway', 'streetCornerAtNight', 'winterStreet'],
+        'shadow':['backdoor', 'bungalows', 'cubicle', 'peopleInShade'],
+        'thermal':['diningRoom', 'lakeSide', 'library', 'park'],
+        'turbulence':['turbulence1', 'turbulence2', 'turbulence3']
+        },  # 3DFR-Paper train set
 }
 
 datasets_test = {
@@ -130,15 +130,15 @@ datasets_test = {
     5: {
          'lowFramerate':['port_0_17fps']
         }, # small dataset for quick debugging
-    6: {'baseline': ['highway'],
-        'cameraJitter': ['badminton'],
+    6: {'baseline': ['pedestrians'],
+        'cameraJitter': ['traffic'],
         'badWeather': ['blizzard'],
-        'dynamicBackground': ['fountain02', 'overpass'],
-        'intermittentObjectMotion': ['sofa'],
-        'lowFramerate': ['port_0_17fps'],
-        'nightVideos': ['bridgeEntry', 'busyBoulvard'],
+        'dynamicBackground': ['boats'],
+        'intermittentObjectMotion': ['parking'],
+        'lowFramerate': ['turnpike_0_5fps'],
+        'nightVideos': ['tramStation'],
         'shadow': ['busStation'],
-        'thermal': ['corridor', 'lakeSide', ],
+        'thermal': ['corridor'],
         'turbulence': ['turbulence0']
-        },
+        }, # 3DFR-Paper test set
 }

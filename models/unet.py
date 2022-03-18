@@ -17,10 +17,15 @@ class unet_vgg16(nn.Module):
     def weight_init(m):
         if isinstance(m, nn.Conv2d):
             nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+            if m.bias is not None:
+                nn.init.constant_(m.bias.data, 0)
+        elif isinstance(m, nn.Conv3d):
+            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
             nn.init.constant_(m.bias.data, 0)
         elif isinstance(m, nn.Linear):
             nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
             nn.init.constant_(m.bias.data, 0)
+
 
     def __init__(self, inp_ch, temporal_network, temporal_length, filter_size, kernel_size=3, skip=True):
         super().__init__()
@@ -85,7 +90,12 @@ class unet_vgg16(nn.Module):
                 avfeat = self.AvFeat(temporal_patch)
                 confeat = self.ConFeat(temporal_patch[:, :, -1, :, :].unsqueeze(dim=1)) # give current frame to network
                 temporal_network_res = torch.cat((avfeat, confeat), dim=1)
-
+            elif self.temporal_network == "avfeat_confeat_tdr":
+                avfeat = self.AvFeat(temporal_patch)
+                confeat = self.ConFeat(temporal_patch[:, :, -1, :, :].unsqueeze(dim=1)) # give current frame to network
+                tdr = self.TDR(temporal_patch.squeeze(dim=1))
+                temporal_network_res = torch.cat((avfeat, confeat), dim=1)
+                temporal_network_res = torch.cat((temporal_network_res, tdr), dim=1)
             elif self.temporal_network == 'avfeat_tdr':
                 avfeat = self.AvFeat(temporal_patch)
                 tdr = self.TDR(temporal_patch.squeeze(dim=1))

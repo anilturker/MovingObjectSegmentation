@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import time
 import configs.data_config as data_config
 import configs.full_cv_config as tr_test_config
 import torch
@@ -15,8 +16,6 @@ from models.convlstm_network import SEnDec_cnn_lstm
 from models.sparse_unet import FgNet
 from tensorboardX import SummaryWriter
 
-import torchvision.models as models
-import time
 
 DEBUG = False
 
@@ -30,16 +29,16 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='BSUV-Net-2.0 pyTorch')
     parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unetvgg16',
-                        help='Which network to use. unetvgg16, unet_attention, sparse_unet, R2AttU, SEnDec_cnn_lstm')
+                        help='Which network to use. unetvgg16, unet_attention, unet3d, sparse_unet, R2AttU, SEnDec_cnn_lstm')
 
     parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network', default='avfeat_confeat',
-                        help='Which temporal network will use. no, avfeat, tdr, avfeat_confeat, avfeat_tdr')
+                        help='Which temporal network will use. no, avfeat, tdr, avfeat_confeat, avfeat_confeat_tdr, avfeat')
 
     # Input images
     parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
                         help='Size of the inputs. If equals 0, use the original sized images. '
                              'Assumes square sized input')
-    parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='manual',
+    parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='no',
                         help='Which empty background to use? no, manual or automatic')
     parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=0,
                         help='Use recent background frame as an input as well. 0 or 1')
@@ -134,7 +133,8 @@ if __name__ == '__main__':
     if model_chk == '':
         model_chk = None
     set_number = args.set_number
-    cuda = True
+
+    cuda = True if torch.cuda.is_available() else False
 
     # Initializations
     dataset_tr = tr_test_config.datasets_tr[set_number]
@@ -265,32 +265,6 @@ if __name__ == '__main__':
     print_debug("Model's state_dict:")
     for param_tensor in model.state_dict():
         print_debug(param_tensor + "\t" + str(model.state_dict()[param_tensor].size()))
-
-    # Load VGG-16 weights
-    """
-    vgg16_weights = models.vgg16_bn(pretrained=True)
-    
-    # Freeze layers
-    for layer in model.frozenLayers:
-        for param in layer.parameters():
-            param.requires_grad = False
-
-    mapped_weights = {}
-    for layer_count, (k_vgg, k_segnet) in enumerate(zip(vgg16_weights.state_dict().keys(), model.state_dict().keys())):
-        # Last layer of VGG16 is not used in encoder part of the model
-        if layer_count == 1000:
-            break
-        if "features" in k_vgg:
-            if "enc1" in k_segnet or "enc2" in k_segnet or "enc3" in k_segnet:
-                mapped_weights[k_segnet] = vgg16_weights.state_dict().pop(k_vgg)
-                print_debug("Mapping {} to {}".format(k_vgg, k_segnet))
-    try:
-        model.load_state_dict(mapped_weights)
-        print_debug("Loaded VGG-16 weights in SegNet !")
-    except:
-        # Ignore missing keys
-        pass
-    """
 
     if cuda:
         model = model.cuda()

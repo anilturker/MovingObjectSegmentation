@@ -4,6 +4,10 @@ import torch
 import csv
 import configs.data_config as data_config
 import configs.full_cv_config as tr_test_config
+from models.unet import unet_vgg16
+from models.sparse_unet import FgNet
+from models.unet_attention import AttU_Net, R2AttU_Net
+from models.convlstm_network import SEnDec_cnn_lstm
 from utils import augmentations as aug
 from utils.data_loader import CDNet2014Loader
 from utils import losses
@@ -13,13 +17,11 @@ from utils.eval_utils import logVideos
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='BSUV-Net-2.0 pyTorch')
-    parser.add_argument('--network', metavar='Network', dest='network', type=str,
-                        default='R2AttU_temporal_network_attention_flux_without_median_bg_segmentation_ch',
-                        help='Which network to use. unetvgg16, unet_attention, unet_attention_flux,'
-                             'unet_no_empty_attention, unet_no_empty_attention_flux, unet_temporal_network_attention,'
-                             'unet_temporal_network_attention_flux, unet_temporal_network, sparse_unet_flux'
-                             'R2AttU_temporal_network_attention_flux'
-                             'R2AttU_temporal_network_attention_flux_without_median_bg_segmentation_ch')
+    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unetvgg16',
+                        help='Which network to use. unetvgg16, unet_attention, sparse_unet, R2AttU, SEnDec_cnn_lstm')
+
+    parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network', default='avfeat_confeat_tdr',
+                        help='Which temporal network will use. no, avfeat, tdr, avfeat_confeat, avfeat_confeat_tdr, avfeat_tdr')
 
     # Input images
     parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
@@ -31,43 +33,21 @@ if __name__ == '__main__':
                         help='Use recent background frame as an input as well. 0 or 1')
     parser.add_argument('--seg_ch', metavar='Segmentation', dest='seg_ch', type=int, default=0,
                         help='Whether to use the FPM channel input or not. 0 or 1')
-    parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=1,
+    parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=0,
                         help='Whether to use the flux tensor input or not. 0 or 1')
-    parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=1,
-                        help='Whether to use the current frame or not. 0 or 1')
+    parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=0,
+                        help='Whether to use the current frame, 0 or 1')
+    parser.add_argument('--patch_frame_size', metavar='Patch frame size', dest='patch_frame_size', type=int, default=0,
+                        help='Whether to use the patch frame, last n th frame or not. 0, n: number of last frame')
 
-    # Optimization
-    parser.add_argument('--lr', metavar='Learning Rate', dest='lr', type=float, default=1e-4,
-                        help='learning rate of the optimization')
-    parser.add_argument('--weight_decay', metavar='weight_decay', dest='weight_decay', type=float, default=1e-2,
-                        help='weight decay of the optimization')
-    parser.add_argument('--num_epochs', metavar='Number of epochs', dest='num_epochs', type=int, default=200,
-                        help='Maximum number of epochs')
-    parser.add_argument('--batch_size', metavar='Minibatch size', dest='batch_size', type=int, default=1,
-                        help='Number of samples per minibatch')
-    parser.add_argument('--loss', metavar='Loss function to be used', dest='loss', type=str, default='jaccard',
-                        help='Loss function to be used ce for cross-entropy or jaccard for Jaccard index')
-    parser.add_argument('--opt', metavar='Optimizer to be used', dest='opt', type=str, default='adam',
-                        help='sgd, rmsprop or adam')
 
-    # Data augmentations
-    parser.add_argument('--aug_noise', metavar='Data Augmentation for noise', dest='aug_noise', type=int, default=1,
-                        help='Whether to use Data Augmentation for noise. 0 or 1')
-    parser.add_argument('--aug_rsc', metavar='Data Augmentation for randomly-shifted crop', dest='aug_rsc', type=int,
-                        default=1,
-                        help='Whether to use randomly-shifted crop. 0 or 1')
-    parser.add_argument('--aug_ptz', metavar='Data Augmentation for PTZ camera crop', dest='aug_ptz', type=int,
-                        default=1,
-                        help='Whether to use PTZ camera crop 0 or 1')
-    parser.add_argument('--aug_id', metavar='Data Augmentation for Illumination Difference', dest='aug_id', type=int,
-                        default=1,
-                        help='Whether to use Data Augmentation for Illumination Difference. 0 or 1')
-    parser.add_argument('--aug_ioa', metavar='Data Augmentation for Intermittent Object Addition', dest='aug_ioa',
-                        type=float, default=0.1,
-                        help='Probability of applying Intermittent Object Addition')
+    # Temporal network parameters
+    parser.add_argument('--temporal_history', metavar='Temporal History', dest='temporal_history', type=int,
+                        default=50, help='The number of historical frames')
+    parser.add_argument('--temporal_kernel_size', metavar='Temporal History', dest='temporal_kernel_size', type=int,
+                        default=8, help='Kernel size of temporal network')
 
     # Cross-validation
-    # You can select more than one train-test split, specify the id's of them
     parser.add_argument('--set_number', metavar='Which training-test split to use from config file', dest='set_number',
                         type=int, default=[1], help='Training and test videos will be selected based on the set number')
 
@@ -78,32 +58,24 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     network = args.network
+    temporal_network = args.temporal_network
     empty_bg = args.empty_bg
     current_fr = args.current_fr
+    patch_frame_size = args.patch_frame_size
     use_flux_tensor = args.flux_ch
     recent_bg = True if args.recent_bg == 1 else False
     seg_ch = True if args.seg_ch == 1 else False
-    lr = args.lr
-    weight_decay = args.weight_decay
-    num_epochs = args.num_epochs
-    batch_size = args.batch_size
-    loss = args.loss
-    opt = args.opt
     inp_size = args.inp_size
     if inp_size == 0:
         inp_size = None
     else:
         inp_size = (inp_size, inp_size)
 
-    use_temporal_network = False
-    temporal_length = 50
-    temporal_kernel_size = 8
+    # Temporal network parameters
+    temporal_length = args.temporal_history
+    temporal_kernel_size = args.temporal_kernel_size
 
-    aug_noise = args.aug_noise
-    aug_rsc = args.aug_rsc
-    aug_ptz = args.aug_ptz
-    aug_id = args.aug_id
-    aug_ioa = args.aug_ioa
+    use_temporal_network = True if temporal_network != 'no' else False
 
     set_number = args.set_number
     cuda = True
@@ -114,11 +86,28 @@ if __name__ == '__main__':
     save_dir = data_config.save_dir
     mdl_dir = os.path.join(save_dir, fname)
 
-    if network == "unet_attention_flux" or network == "unet_no_empty_attention_flux":
-        use_flux_tensor = True
+    # load model
+    num_ch_per_inp = (1 + (1 * seg_ch))
+    num_inp = (1 * (empty_bg != "no")) + (1 * recent_bg) + 1 * current_fr + (1 * (patch_frame_size != 0))
+    num_ch = num_inp * num_ch_per_inp + 1 * (use_flux_tensor == True)
 
-    if network == "unet_temporal_network" or "unet_temporal_network_attention":
-        use_temporal_network = True
+    if network == "unetvgg16":
+        model = unet_vgg16(inp_ch=num_ch, kernel_size=3, skip=1, temporal_network=temporal_network,
+                           temporal_length=temporal_length, filter_size=temporal_kernel_size)
+    elif network.startswith("unet_attention"):
+        model = AttU_Net(inp_ch=num_ch, temporal_network=temporal_network, temporal_length=temporal_length,
+                         filter_size=temporal_kernel_size)
+    elif network.startswith("sparse_unet"):
+        model = FgNet(inp_ch=num_ch, temporal_network=temporal_network, temporal_length=temporal_length,
+                         filter_size=temporal_kernel_size)
+    elif network.startswith('R2AttU'):
+        model = R2AttU_Net(inp_ch=num_ch, temporal_network=temporal_network, temporal_length=temporal_length,
+                         filter_size=temporal_kernel_size)
+    elif network.startswith('SEnDec_cnn_lstm'):
+        model = SEnDec_cnn_lstm(inp_ch=num_ch, patch_frame_size=patch_frame_size)
+
+    else:
+        raise ValueError(f"network = {network} is not defined")
 
     # Evaluation on test videos
     model = torch.load(f"{mdl_dir}/model_best.mdl").cuda()
@@ -166,6 +155,7 @@ if __name__ == '__main__':
             csv_path,
             current_fr=current_fr,
             empty_bg=empty_bg,
+            patch_frame_size=patch_frame_size,
             use_flux_tensor=use_flux_tensor,
             use_temporal_network=use_temporal_network,
             temporal_length=temporal_length,

@@ -1,4 +1,4 @@
-# BSUV-Net-2.0
+# Moving Object Segmentation
 
 ## Requirements
 1. [Python 3.6.9](https://www.python.org/)
@@ -11,7 +11,7 @@
 Steps for preparing CDNet2014
 1. Download the dataset from [changedetection.net](http://changedetection.net/) and unzip the contents in `./dataset/currentFr`
 
-2. Download pre-computed empty and recent background frames with FPM images from [Google Drive](https://drive.google.com/drive/folders/1fskxV1paCsoZvqTVLjnlAdPOCHk1_XmF?usp=sharing) and place the contents in `./dataset`
+2. Download pre-computed frames from [Google Drive](https://drive.google.com/drive/folders/1fskxV1paCsoZvqTVLjnlAdPOCHk1_XmF?usp=sharing) and place the contents in `./dataset`
 
 3. In the end, `./dataset` folder should have the following subfolders: `currentFr`, `currentFrFpm`, `emptyBg`, `emptyBgFpm`, `recentBg`, `recentBgFpm`.
 
@@ -24,9 +24,6 @@ Steps for preparing CDNet2014
 ## Visualization of Spatio-Temporal Data Augmentations
 Follow the steps in `notebooks/visualization.ipynb` to visualize spatio-temporal data augmentations.
 
-## Inference on unseen video
-Use this repo for inference: [https://github.com/ozantezcan/BSUV-Net-inference](https://github.com/ozantezcan/BSUV-Net-inference)
-
 ## Training and Cross-Validation with other datasets.
-Change `./configs/data_config.py` and `./configs/full_cv_config.py` for training BSUV-Net 2.0 with different datasets.
+Change `./configs/data_config.py` and `./configs/full_cv_config.py` for training the networks with different datasets.
 
