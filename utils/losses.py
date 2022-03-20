@@ -30,10 +30,12 @@ def getValid(true, pred, nonvalid=-1):
 
 
 def binary_cross_entropy_loss(true, pred, smooth=100):
-
+    epsilon = 1e-7
+    loss = torch.tensor(epsilon)
     bce = F.binary_cross_entropy_with_logits(pred, true).clamp(0, 1)
-    loss = bce * smooth
-    return loss + 1e-04
+    if not math.isnan(bce):
+        loss = (bce * smooth) + epsilon
+    return loss
 
 
 def jaccard_loss(true, pred, smooth=100):
@@ -50,13 +52,20 @@ def jaccard_loss(true, pred, smooth=100):
     Returns:
         jacc_loss: the Jaccard loss.
     """
+    epsilon = 1e-7
+    loss = torch.tensor(epsilon)
     intersection = torch.sum(true*pred)
     jac = (intersection + smooth) / (torch.sum(true) + torch.sum(pred) - intersection + smooth)
-    return (1 - jac) * smooth + 1e-04
+    if not math.isnan(jac):
+        loss = (1 - jac) * smooth + epsilon
+    return loss
 
 
 # tversky loss
 def tverskyLoss(true, pred, alpha=0.3, beta=0.7, smooth=100):
+    epsilon = 1e-7
+    loss = torch.tensor(epsilon)
+
     pred = pred.contiguous()
     true = true.contiguous()
 
@@ -64,25 +73,33 @@ def tverskyLoss(true, pred, alpha=0.3, beta=0.7, smooth=100):
     FP = torch.sum((1 - true) * pred)
     FN = torch.sum(true * (1 - pred))
 
-    loss = (TP + smooth) / (TP + alpha * FP + beta * FN + smooth)
-    loss = (1 - loss) * smooth
-
-    return loss + 1e-04
+    tversky_loss = (TP + smooth) / (TP + alpha * FP + beta * FN + smooth)
+    if not math.isnan(tversky_loss):
+        loss = (1 - tversky_loss) * smooth + epsilon
+    return loss
 
 
 # calculate overall loss
 def tverskyLoss_bce_loss(true, pred, bceWeight=0.5, alpha=0.3, beta=0.7, smooth=100):
+    epsilon = 1e-7
+
     bce = binary_cross_entropy_loss(pred, true, smooth)
     tversky = tverskyLoss(pred, true, alpha, beta, smooth)
 
-    loss = bce * bceWeight + tversky * (1 - bceWeight)
+    loss = bce * bceWeight + tversky * (1 - bceWeight) + epsilon
 
-    return loss + 1e-04
+    return loss
 
 
 def focal_tversky_loss(true, pred, alpha=0.3, beta=0.7, smooth=100, gamma=0.75):
+    epsilon = 1e-7
+    loss = torch.tensor(epsilon)
+
     tv = tverskyLoss(true, pred, alpha, beta, smooth)
-    return torch.pow(tv, gamma) + 1e-04
+    if not math.isnan(tv):
+        loss = torch.pow(tv, gamma) + epsilon
+
+    return loss
 
 
 def binary_focal_loss(true, pred, alpha=3.0, gamma=2.0, **kwargs):
@@ -97,6 +114,9 @@ def binary_focal_loss(true, pred, alpha=3.0, gamma=2.0, **kwargs):
     :param **kwargs
         balance_index: (int) balance class index, should be specific when alpha is float
     """
+    epsilon = 1e-7
+    loss = torch.tensor(epsilon)
+
     pred = torch.clamp(pred, 0, 1.0)
 
     pos_mask = (true == 1).float()
@@ -107,10 +127,12 @@ def binary_focal_loss(true, pred, alpha=3.0, gamma=2.0, **kwargs):
 
     neg_weight = (neg_mask * torch.pow(pred, gamma)).detach()
     neg_loss = -alpha * neg_weight * F.logsigmoid(-pred)  # / (torch.sum(neg_weight) + 1e-4)
-    loss = pos_loss + neg_loss
-    loss = loss.mean()
+    focal_loss = (pos_loss + neg_loss).mean()
 
-    return loss + 1e-04
+    if not math.isnan(focal_loss):
+        loss = focal_loss + epsilon
+
+    return loss
 
 def weighted_crossentropy(true, pred, weight_pos=15, weight_neg=1):
     """Weighted cross entropy between ground truth and predictions
@@ -135,9 +157,11 @@ def acc(true, pred):
     Returns:
         acc: Accuracy.
     """
-    acc = torch.tensor([0.0])
+
+    epsilon = 1e-7
+    acc = torch.tensor(epsilon)
     if len(true) > 0 and len(pred) > 0:
-       acc = torch.mean((true == pred.round()).float()) + 1e-04
+       acc = torch.mean((true == pred.round()).float()) + epsilon
     return acc
 
 def f_score(true, pred):
@@ -150,13 +174,16 @@ def f_score(true, pred):
         (tensor): recall
         (tensor): f-score
     """
+
+    epsilon = 1e-7
+
     fn = torch.sum(true * (1 - pred))
     fp = torch.sum((1 - true) * pred)
     tp = torch.sum(true * pred)
-    prec = tp + 1e-04 / (tp + fp + 1e-04)
-    recall = tp + 1e-04 / (tp + fn + 1e-04)
+    prec = tp / (tp + fp + epsilon)
+    recall = tp / (tp + fn + epsilon)
 
-    if tp+fn == 0:
+    if tp + fn == 0:
         f_score = torch.tensor(1)
     elif tp == 0:
         f_score = torch.tensor(0)

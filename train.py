@@ -37,7 +37,7 @@ if __name__ == '__main__':
                         help='Which temporal network will use. no, avfeat, tdr, avfeat_confeat, avfeat_confeat_tdr, avfeat')
 
     # Input images
-    parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=64,
+    parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
                         help='Size of the inputs. If equals 0, use the original sized images. '
                              'Assumes square sized input')
     parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='no',
@@ -50,7 +50,7 @@ if __name__ == '__main__':
                         help='Whether to use the flux tensor input or not. 0 or 1')
     parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=0,
                         help='Whether to use the current frame, 0 or 1')
-    parser.add_argument('--patch_frame_size', metavar='Patch frame size', dest='patch_frame_size', type=int, default=16,
+    parser.add_argument('--patch_frame_size', metavar='Patch frame size', dest='patch_frame_size', type=int, default=8,
                         help='Whether to use the patch frame, last n th frame or not. 0, n: number of last frame')
 
 
@@ -63,9 +63,9 @@ if __name__ == '__main__':
                         help='Maximum number of epochs')
     parser.add_argument('--batch_size', metavar='Minibatch size', dest='batch_size', type=int, default=1,
                         help='Number of samples per minibatch')
-    parser.add_argument('--loss', metavar='Loss function to be used', dest='loss', type=str, default='jaccard',
+    parser.add_argument('--loss', metavar='Loss function to be used', dest='loss', type=str, default='focal-tversky-loss',
                         help='Loss function to be used ce for cross-entropy, focal-loss, tversky-loss'
-                             ' focal-tversky-loss or jaccard')
+                             'focal-tversky-loss or jaccard')
     parser.add_argument('--opt', metavar='Optimizer to be used', dest='opt', type=str, default='adam',
                         help='sgd, rmsprop or adam')
 
@@ -88,12 +88,12 @@ if __name__ == '__main__':
                         default=8, help='Kernel size of temporal network')
 
     # Checkpoint
-    parser.add_argument('--model_chk', metavar='Checkpoint for the model', dest='model_chk', type=int, default=1,
+    parser.add_argument('--model_chk', metavar='Checkpoint for the model', dest='model_chk', type=int, default=0,
                         help='Whether to use checkpoint, 0 or 1')
 
     # Cross-validation
     parser.add_argument('--set_number', metavar='Which training-test split to use from config file', dest='set_number',
-                        type=int, default=6
+                        type=int, default=5
                         , help='Training and test videos will be selected based on the set number')
 
     # Model name

@@ -1,6 +1,7 @@
 from torch.nn import Module, Sequential
 from torch.nn import Conv3d, ConvTranspose3d, BatchNorm3d, MaxPool3d, AvgPool1d, Dropout3d
 from torch.nn import ReLU, Sigmoid
+import torch.nn as nn
 import torch
 
 class UNet_3D(Module):
@@ -10,8 +11,20 @@ class UNet_3D(Module):
     #        3|__  ______  __|3
     #           4|__ __ __|4
     # The convolution operations on either side are residual subject to 1*1 Convolution for channel homogeneity
+    @staticmethod
+    def weight_init(m):
+        if isinstance(m, nn.Conv2d):
+            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+            nn.init.constant_(m.bias.data, 0)
+        elif isinstance(m, nn.Conv3d):
+            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+            nn.init.constant_(m.bias.data, 0)
+        elif isinstance(m, nn.Linear):
+            nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
+            nn.init.constant_(m.bias.data, 0)
 
-    def __init__(self, inp_ch=1, feat_channels=[64, 256, 256, 512, 1024], residual='conv'):
+
+    def __init__(self, inp_ch=1, feat_channels=[64, 128, 128, 256], residual='conv'):
         # residual: conv for residual input x through 1*1 conv across every layer for downsampling, None for removal of residuals
 
         super(UNet_3D, self).__init__()
@@ -27,16 +40,13 @@ class UNet_3D(Module):
         self.conv_blk2 = Conv3D_Block(feat_channels[0], feat_channels[1], residual=residual)
         self.conv_blk3 = Conv3D_Block(feat_channels[1], feat_channels[2], residual=residual)
         self.conv_blk4 = Conv3D_Block(feat_channels[2], feat_channels[3], residual=residual)
-        self.conv_blk5 = Conv3D_Block(feat_channels[3], feat_channels[4], residual=residual)
 
         # Decoder convolutions
-        self.dec_conv_blk4 = Conv3D_Block(2 * feat_channels[3], feat_channels[3], residual=residual)
         self.dec_conv_blk3 = Conv3D_Block(2 * feat_channels[2], feat_channels[2], residual=residual)
         self.dec_conv_blk2 = Conv3D_Block(2 * feat_channels[1], feat_channels[1], residual=residual)
         self.dec_conv_blk1 = Conv3D_Block(2 * feat_channels[0], feat_channels[0], residual=residual)
 
         # Decoder upsamplers
-        self.deconv_blk4 = Deconv3D_Block(feat_channels[4], feat_channels[3])
         self.deconv_blk3 = Deconv3D_Block(feat_channels[3], feat_channels[2])
         self.deconv_blk2 = Deconv3D_Block(feat_channels[2], feat_channels[1])
         self.deconv_blk1 = Deconv3D_Block(feat_channels[1], feat_channels[0])
@@ -64,17 +74,11 @@ class UNet_3D(Module):
         x3 = self.conv_blk3(x_low2)
 
         x_low3 = self.pool3(x3)
-        x4 = self.conv_blk4(x_low3)
-
-        x_low4 = self.pool4(x4)
-        base = self.conv_blk5(x_low4)
+        base = self.conv_blk4(x_low3)
 
         # Decoder part
 
-        d4 = torch.cat([self.deconv_blk4(base), x4], dim=1)
-        d_high4 = self.dec_conv_blk4(d4)
-
-        d3 = torch.cat([self.deconv_blk3(d_high4), x3], dim=1)
+        d3 = torch.cat([self.deconv_blk3(base), x3], dim=1)
         d_high3 = self.dec_conv_blk3(d3)
         d_high3 = Dropout3d(p=0.5)(d_high3)
 
@@ -163,7 +167,7 @@ if __name__ == '__main__':
     torch.cuda.set_device(0)
     net =UNet_3D(residual='pool').cuda().eval()
 
-    data = Variable(torch.randn(1, 16, 112, 112)).cuda()
+    data = Variable(torch.randn(1, 8, 224, 224)).cuda()
 
     out = net(data)
 
