@@ -162,6 +162,7 @@ if __name__ == '__main__':
             recent_bg=recent_bg,
             segmentation_ch=seg_ch,
             save_vid=False,
+            use_selected=200,
             set_number=set_number,
             debug=False
         )

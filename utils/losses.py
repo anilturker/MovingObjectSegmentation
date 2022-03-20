@@ -2,6 +2,7 @@
 """
 
 import torch
+import math
 from torch.nn import functional as F
 
 
@@ -32,7 +33,7 @@ def binary_cross_entropy_loss(true, pred, smooth=100):
 
     bce = F.binary_cross_entropy_with_logits(pred, true).clamp(0, 1)
     loss = bce * smooth
-    return loss
+    return loss + 1e-04
 
 
 def jaccard_loss(true, pred, smooth=100):
@@ -51,7 +52,7 @@ def jaccard_loss(true, pred, smooth=100):
     """
     intersection = torch.sum(true*pred)
     jac = (intersection + smooth) / (torch.sum(true) + torch.sum(pred) - intersection + smooth)
-    return (1 - jac) * smooth
+    return (1 - jac) * smooth + 1e-04
 
 
 # tversky loss
@@ -66,7 +67,7 @@ def tverskyLoss(true, pred, alpha=0.3, beta=0.7, smooth=100):
     loss = (TP + smooth) / (TP + alpha * FP + beta * FN + smooth)
     loss = (1 - loss) * smooth
 
-    return loss
+    return loss + 1e-04
 
 
 # calculate overall loss
@@ -76,7 +77,13 @@ def tverskyLoss_bce_loss(true, pred, bceWeight=0.5, alpha=0.3, beta=0.7, smooth=
 
     loss = bce * bceWeight + tversky * (1 - bceWeight)
 
-    return loss
+    return loss + 1e-04
+
+
+def focal_tversky_loss(true, pred, alpha=0.3, beta=0.7, smooth=100, gamma=0.75):
+    tv = tverskyLoss(true, pred, alpha, beta, smooth)
+    return torch.pow(tv, gamma) + 1e-04
+
 
 def binary_focal_loss(true, pred, alpha=3.0, gamma=2.0, **kwargs):
     """
@@ -103,7 +110,7 @@ def binary_focal_loss(true, pred, alpha=3.0, gamma=2.0, **kwargs):
     loss = pos_loss + neg_loss
     loss = loss.mean()
 
-    return loss
+    return loss + 1e-04
 
 def weighted_crossentropy(true, pred, weight_pos=15, weight_neg=1):
     """Weighted cross entropy between ground truth and predictions
@@ -118,7 +125,7 @@ def weighted_crossentropy(true, pred, weight_pos=15, weight_neg=1):
     # Weighting for class imbalance
     weight_vector = true * weight_pos + (1. - true) * weight_neg
     weighted_bce = weight_vector * bce
-    return -torch.mean(weighted_bce)
+    return -torch.mean(weighted_bce + 1e-04)
 
 def acc(true, pred):
     """Accuracy between ground truth and predictions
@@ -128,7 +135,10 @@ def acc(true, pred):
     Returns:
         acc: Accuracy.
     """
-    return torch.mean((true == pred.round()).float())
+    acc = torch.tensor([0.0])
+    if len(true) > 0 and len(pred) > 0:
+       acc = torch.mean((true == pred.round()).float()) + 1e-04
+    return acc
 
 def f_score(true, pred):
     """False Negative Rate between ground truth and predictions
@@ -143,8 +153,8 @@ def f_score(true, pred):
     fn = torch.sum(true * (1 - pred))
     fp = torch.sum((1 - true) * pred)
     tp = torch.sum(true * pred)
-    prec = tp / (tp + fp)
-    recall = tp / (tp + fn)
+    prec = tp + 1e-04 / (tp + fp + 1e-04)
+    recall = tp + 1e-04 / (tp + fn + 1e-04)
 
     if tp+fn == 0:
         f_score = torch.tensor(1)

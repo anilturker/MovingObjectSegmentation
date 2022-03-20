@@ -48,7 +48,7 @@ def evalVideo(cat, vid, model, current_fr=False, empty_bg=False, use_flux_tensor
                              patch_frame_size=patch_frame_size)]
     ]
     dataloader = CDNet2014Loader({cat:[vid]}, empty_bg=empty_bg, current_fr=current_fr, use_flux_tensor=use_flux_tensor, recent_bg=recent_bg,
-        use_temporal_network=use_temporal_network, temporal_length=temporal_length, use_selected=200,
+        use_temporal_network=use_temporal_network, temporal_length=temporal_length, use_selected=use_selected,
         patch_frame_size=patch_frame_size, segmentation_ch=segmentation_ch, transforms=transforms, shuffle=True)
 
     tensorloader = torch.utils.data.DataLoader(dataset=dataloader,
@@ -150,7 +150,7 @@ def evalVideo(cat, vid, model, current_fr=False, empty_bg=False, use_flux_tensor
     return 1-recall, prec, f_score
 
 def logVideos(dataset, model, model_name, csv_path, empty_bg=False, current_fr=False, use_flux_tensor=False,
-              patch_frame_size=False, use_temporal_network=False, recent_bg=False, temporal_length=50,
+              patch_frame_size=False, use_temporal_network=False, use_selected=False, recent_bg=False, temporal_length=50,
               segmentation_ch=False, eps=1e-5, save_vid=False, save_outputs="", set_number=0, debug=False):
     """ Evaluate the videos given in dataset and log them to a csv file
     Args:
@@ -180,7 +180,7 @@ def logVideos(dataset, model, model_name, csv_path, empty_bg=False, current_fr=F
                                            patch_frame_size=patch_frame_size, temporal_length=temporal_length,
                                            recent_bg=recent_bg, segmentation_ch=segmentation_ch, eps=eps,
                                            save_vid=save_vid, save_outputs=save_outputs, model_name=model_name,
-                                           debug=debug)
+                                           use_selected=use_selected, debug=debug)
 
             new_row[csv_header2loc[vid]] = fnr
             new_row[csv_header2loc[vid]+1] = prec

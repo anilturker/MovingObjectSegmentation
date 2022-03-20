@@ -21,8 +21,8 @@ class Conv_block_3d(nn.Module):
 												   padding=padding, bias=True))
 		if batch_norm:
 			self.conv3d.add_module("batchNorm3d", nn.BatchNorm3d(ch_out))
-		if activation:
-			self.conv3d.add_module("act", activation)
+
+		self.conv3d.add_module("act", activation)
 
 	def forward(self,x):
 		x = self.conv3d(x)
@@ -66,7 +66,8 @@ class ConvLSTMBlock(nn.Module):
 		return nn.Sequential(
 			nn.Conv2d(in_channels, out_channels,
 					  kernel_size=kernel_size, padding=padding, stride=stride, bias=False),
-			nn.BatchNorm2d(out_channels))
+			nn.BatchNorm2d(out_channels),
+			nn.ReLU())
 
 	def forward(self, inputs):
 		'''
@@ -169,7 +170,7 @@ class SEnDec_cnn_lstm(nn.Module):
 
 		self.seq10 = ConvLSTMBlock(32, 16, kernel_size=3, padding=1)
 
-		self.out = Conv_block_3d(16, ch_out=1, batch_norm=True, activation=nn.Sigmoid(),
+		self.out = Conv_block_3d(16, ch_out=1, batch_norm=False, activation=nn.Sigmoid(),
 							 kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1))
 
 	def forward(self, inp):
@@ -215,9 +216,11 @@ class SEnDec_cnn_lstm(nn.Module):
 
 		seq10 = self.seq10(seq9)
 
+		"""
 		# Channel averaging
 		avg = torch.mean(seq10, dim=2).unsqueeze(dim=2)
-
+		"""
+		avg = seq10[:,:,-1].unsqueeze(dim=2)
 		out = self.out(avg)
 
 		return out
@@ -232,7 +235,7 @@ if __name__ == '__main__':
 	torch.cuda.set_device(0)
 	net =SEnDec_cnn_lstm(inp_ch=1).cuda().eval()
 
-	data = Variable(torch.randn(1, 1, 16, 112, 112)).cuda()
+	data = Variable(torch.randn(1, 8, 224, 224)).cuda()
 
 	out = net(data)
 

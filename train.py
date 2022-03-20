@@ -11,10 +11,12 @@ from utils import augmentations as aug
 from utils.data_loader import CDNet2014Loader
 from utils import losses
 from models.unet import unet_vgg16
+from models.unet_3d import UNet_3D
 from models.unet_attention import AttU_Net, R2AttU_Net
 from models.convlstm_network import SEnDec_cnn_lstm
 from models.sparse_unet import FgNet
 from tensorboardX import SummaryWriter
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
 DEBUG = False
@@ -28,14 +30,14 @@ def print_debug(s):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='BSUV-Net-2.0 pyTorch')
-    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unetvgg16',
+    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unet3d',
                         help='Which network to use. unetvgg16, unet_attention, unet3d, sparse_unet, R2AttU, SEnDec_cnn_lstm')
 
-    parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network', default='avfeat_confeat_tdr',
+    parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network', default='no',
                         help='Which temporal network will use. no, avfeat, tdr, avfeat_confeat, avfeat_confeat_tdr, avfeat')
 
     # Input images
-    parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
+    parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=64,
                         help='Size of the inputs. If equals 0, use the original sized images. '
                              'Assumes square sized input')
     parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='no',
@@ -48,12 +50,12 @@ if __name__ == '__main__':
                         help='Whether to use the flux tensor input or not. 0 or 1')
     parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=0,
                         help='Whether to use the current frame, 0 or 1')
-    parser.add_argument('--patch_frame_size', metavar='Patch frame size', dest='patch_frame_size', type=int, default=0,
+    parser.add_argument('--patch_frame_size', metavar='Patch frame size', dest='patch_frame_size', type=int, default=16,
                         help='Whether to use the patch frame, last n th frame or not. 0, n: number of last frame')
 
 
     # Optimization
-    parser.add_argument('--lr', metavar='Learning Rate', dest='lr', type=float, default=1e-4,
+    parser.add_argument('--lr', metavar='Learning Rate', dest='lr', type=float, default=1e-3,
                         help='learning rate of the optimization')
     parser.add_argument('--weight_decay', metavar='weight_decay', dest='weight_decay', type=float, default=1e-2,
                         help='weight decay of the optimization')
@@ -63,7 +65,7 @@ if __name__ == '__main__':
                         help='Number of samples per minibatch')
     parser.add_argument('--loss', metavar='Loss function to be used', dest='loss', type=str, default='jaccard',
                         help='Loss function to be used ce for cross-entropy, focal-loss, tversky-loss'
-                             ' or jaccard for Jaccard index')
+                             ' focal-tversky-loss or jaccard')
     parser.add_argument('--opt', metavar='Optimizer to be used', dest='opt', type=str, default='adam',
                         help='sgd, rmsprop or adam')
 
@@ -91,7 +93,8 @@ if __name__ == '__main__':
 
     # Cross-validation
     parser.add_argument('--set_number', metavar='Which training-test split to use from config file', dest='set_number',
-                        type=int, default=6, help='Training and test videos will be selected based on the set number')
+                        type=int, default=6
+                        , help='Training and test videos will be selected based on the set number')
 
     # Model name
     parser.add_argument('--model_name', metavar='Name of the model for log keeping', dest='model_name',
@@ -243,6 +246,8 @@ if __name__ == '__main__':
                          filter_size=temporal_kernel_size)
     elif network.startswith('SEnDec_cnn_lstm'):
         model = SEnDec_cnn_lstm(inp_ch=1)  # inp_ch is 3 if rgb input else 1
+    elif network.startswith('unet3d'):
+        model = UNet_3D(inp_ch=1)  # inp_ch is 3 if rgb input else 1
 
     else:
         raise ValueError(f"network = {network} is not defined")
@@ -258,6 +263,10 @@ if __name__ == '__main__':
     else:
         raise ("opt=%s is not defined, please choose from ('adam', 'sgd')." % opt)
 
+    # Learning rate scheduler
+    scheduler = ReduceLROnPlateau(optimizer, 'min', patience=2,
+                                                     factor=0.5, min_lr=1e-04, verbose=True)
+
     if loss == "jaccard":
         loss_func = losses.jaccard_loss
     elif loss == "ce":
@@ -266,8 +275,11 @@ if __name__ == '__main__':
         loss_func = losses.binary_focal_loss
     elif loss == "tversky-loss":
         loss_func = losses.tverskyLoss_bce_loss
+    elif loss == "focal-tversky-loss":
+        loss_func = losses.focal_tversky_loss
     else:
-        raise ("loss=%s is not defined, please choose from ('jaccard', 'ce', 'focal-loss', 'tversky-loss')." % opt)
+        raise ("loss=%s is not defined, please choose from ('jaccard', 'ce', 'focal-loss', 'tversky-loss, '"
+               " focal-tversky-loss).")
 
     # Print model's state_dict
     print_debug("Model's state_dict:")
@@ -277,6 +289,8 @@ if __name__ == '__main__':
     if cuda:
         model = model.cuda()
 
+    best_f = 0.0
+    start_epoch = 0
     if model_chk:
         chk_path = f"{mdl_dir}/checkpoint.pth"
         if os.path.exists(chk_path):
@@ -289,11 +303,7 @@ if __name__ == '__main__':
             optimizer.load_state_dict(checkpoint['optimizer'])
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(model_chk, checkpoint['epoch']))
-        else:
-            best_f = 0.0
-            start_epoch = 0
-    else:
-        start_epoch = 0
+
 
     # training
     epoch_loss = 0.0 # For saving the best model
@@ -322,8 +332,6 @@ if __name__ == '__main__':
                         inputs, labels = inputs.cuda(), labels.cuda()
                     outputs = model(inputs)
                     labels_1d, outputs_1d = losses.getValid(labels, outputs)
-                    if len(labels_1d) == 0 or len(outputs_1d) == 0:
-                        continue
                     loss = loss_func(labels_1d, outputs_1d)
                     loss.backward()
                     optimizer.step()
@@ -356,9 +364,9 @@ if __name__ == '__main__':
             epoch_acc = running_acc / len(tensorloader)
             epoch_f = running_f / len(tensorloader)
 
-            current_lr = lr
-            print("::%s:: Epoch %d loss: %.3f, acc: %.3f, f_score: %.3f, lr x 1000: %.4f, elapsed time: %s" \
-                  % (phase, epoch + 1, epoch_loss, epoch_acc, epoch_f, current_lr * 1000, (time.time() - st)))
+            current_lr = optimizer.param_groups[0]['lr']
+            print("::%s:: Epoch %d loss: %.3f, acc: %.3f, f_score: %.3f, lr : %.6f, elapsed time: %s" \
+                  % (phase, epoch + 1, epoch_loss, epoch_acc, epoch_f,  current_lr, (time.time() - st)))
 
             writer.add_scalar(f"{phase}/loss", epoch_loss, epoch)
             writer.add_scalar(f"{phase}/acc", epoch_acc, epoch)
@@ -391,6 +399,8 @@ if __name__ == '__main__':
                                {'epoch_loss': epoch_loss, 'epoch_acc': epoch_acc, 'epoch_f': epoch_f})
 
             st = time.time()
+
+        scheduler.step(epoch_loss)
 
     # save the last model
     torch.save(model, f"{mdl_dir}/model_last.mdl")
