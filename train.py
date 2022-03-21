@@ -30,11 +30,14 @@ def print_debug(s):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='BSUV-Net-2.0 pyTorch')
-    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unet3d',
-                        help='Which network to use. unetvgg16, unet_attention, unet3d, sparse_unet, R2AttU, SEnDec_cnn_lstm')
+    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unetvgg16',
+                        help='Which network to use. unetvgg16, unet_attention, unet3d, sparse_unet, '
+                             'R2AttU, SEnDec_cnn_lstm')
 
-    parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network', default='no',
-                        help='Which temporal network will use. no, avfeat, tdr, avfeat_confeat, avfeat_confeat_tdr, avfeat')
+    parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network',
+                        default='avfeat_confeat_tdr',
+                        help='Which temporal network will use. no, avfeat, tdr, avfeat_confeat, '
+                             'avfeat_confeat_tdr, avfeat')
 
     # Input images
     parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
@@ -50,7 +53,7 @@ if __name__ == '__main__':
                         help='Whether to use the flux tensor input or not. 0 or 1')
     parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=0,
                         help='Whether to use the current frame, 0 or 1')
-    parser.add_argument('--patch_frame_size', metavar='Patch frame size', dest='patch_frame_size', type=int, default=8,
+    parser.add_argument('--patch_frame_size', metavar='Patch frame size', dest='patch_frame_size', type=int, default=0,
                         help='Whether to use the patch frame, last n th frame or not. 0, n: number of last frame')
 
 
@@ -63,7 +66,8 @@ if __name__ == '__main__':
                         help='Maximum number of epochs')
     parser.add_argument('--batch_size', metavar='Minibatch size', dest='batch_size', type=int, default=1,
                         help='Number of samples per minibatch')
-    parser.add_argument('--loss', metavar='Loss function to be used', dest='loss', type=str, default='focal-tversky-loss',
+    parser.add_argument('--loss', metavar='Loss function to be used', dest='loss', type=str,
+                        default='focal-tversky-loss',
                         help='Loss function to be used ce for cross-entropy, focal-loss, tversky-loss'
                              'focal-tversky-loss or jaccard')
     parser.add_argument('--opt', metavar='Optimizer to be used', dest='opt', type=str, default='adam',
@@ -93,7 +97,7 @@ if __name__ == '__main__':
 
     # Cross-validation
     parser.add_argument('--set_number', metavar='Which training-test split to use from config file', dest='set_number',
-                        type=int, default=5
+                        type=int, default=6
                         , help='Training and test videos will be selected based on the set number')
 
     # Model name

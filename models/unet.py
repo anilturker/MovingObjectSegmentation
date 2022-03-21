@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 from models.unet_tools import UNetDown, UNetUp, ConvSig
 from models.temporal_networks import AvFeat, TDR, ConFeat
+from models.convlstm_network import ConvLSTMBlock
 
 class unet_vgg16(nn.Module):
     """
@@ -44,7 +45,7 @@ class unet_vgg16(nn.Module):
 
         if 'tdr' in self.temporal_network:
             self.TDR = TDR(inp_ch=temporal_length)
-            inp_ch = inp_ch + 1
+            inp_ch = inp_ch + filter_size
 
         self.enc1 = UNetDown(inp_ch, 64, 2, batch_norm=True, maxpool=False, kernel_size=kernel_size)
         self.enc2 = UNetDown(64, 128, 2, batch_norm=True, maxpool=True, kernel_size=kernel_size)
@@ -105,7 +106,6 @@ class unet_vgg16(nn.Module):
 
             inp = torch.cat((curr_patch, temporal_network_res), dim=1)
 
-        # encoding path
         d1 = self.enc1(inp)
         d2 = self.enc2(d1)
         d3 = self.enc3(d2)
