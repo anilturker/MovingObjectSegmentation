@@ -368,9 +368,8 @@ if __name__ == '__main__':
             epoch_acc = running_acc / len(tensorloader)
             epoch_f = running_f / len(tensorloader)
 
-            current_lr = optimizer.param_groups[0]['lr']
             print("::%s:: Epoch %d loss: %.3f, acc: %.3f, f_score: %.3f, lr : %.6f, elapsed time: %s" \
-                  % (phase, epoch + 1, epoch_loss, epoch_acc, epoch_f,  current_lr, (time.time() - st)))
+                  % (phase, epoch + 1, epoch_loss, epoch_acc, epoch_f,  lr, (time.time() - st)))
 
             writer.add_scalar(f"{phase}/loss", epoch_loss, epoch)
             writer.add_scalar(f"{phase}/acc", epoch_acc, epoch)
