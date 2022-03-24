@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from models.temporal_networks import AvFeat, TDR
+from models.temporal_networks import AvFeat, TDR, ConFeat
 
 
 class conv_block(nn.Module):
@@ -53,13 +53,15 @@ class FgNet(nn.Module):
     def weight_init(m):
         if isinstance(m, nn.Conv2d):
             nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
-            nn.init.constant_(m.bias.data, 0)
+            if m.bias is not None:
+                nn.init.constant_(m.bias.data, 0)
         elif isinstance(m, nn.Linear):
             nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
             nn.init.constant_(m.bias.data, 0)
 
+
     def __init__(self, inp_ch, temporal_network, temporal_length, filter_size):
-        super(FgNet, self).__init__()
+        super().__init__()
 
         self.temporal_network = temporal_network
         self.temporal_length = temporal_length
@@ -68,16 +70,22 @@ class FgNet(nn.Module):
             self.AvFeat = AvFeat(filter_size=filter_size)
             inp_ch = inp_ch + filter_size
 
+        if 'confeat' in self.temporal_network:
+            self.ConFeat = ConFeat(filter_size=filter_size)
+            inp_ch = inp_ch + filter_size
+
         if 'tdr' in self.temporal_network:
             self.TDR = TDR(inp_ch=temporal_length)
-            inp_ch = inp_ch + 1
+            inp_ch = inp_ch + filter_size
 
-        self.enc1 = conv_block(inp_ch, 8)
-        self.enc2 = conv_block(8, 4)
-        self.dec1 = up_conv(4, 8)
-        self.dec2 = up_conv(8, 8)
+        self.enc1 = conv_block(inp_ch, 32)
+        self.enc2 = conv_block(32, 64)
+        self.enc3 = conv_block(64, 128)
+        self.dec1 = up_conv(128, 64)
+        self.dec2 = up_conv(64, 32)
+        self.dec3 = up_conv(32, 16)
 
-        self.out = ConvSig(8)
+        self.out = ConvSig(16)
 
         # Apply weight initialization
         self.apply(self.weight_init)
@@ -94,10 +102,20 @@ class FgNet(nn.Module):
                                               dtype=torch.float).unsqueeze(dim=1)
                 curr_patch = torch.tensor(inp[:, :temporal_network_first_index], dtype=torch.float)
 
-            if self.temporal_network == 'avfeat':
+            if self.temporal_network in "avfeat":
                 temporal_network_res = self.AvFeat(temporal_patch)
             elif self.temporal_network == 'tdr':
                 temporal_network_res = self.TDR(temporal_patch.squeeze(dim=1))
+            elif self.temporal_network == "avfeat_confeat":
+                avfeat = self.AvFeat(temporal_patch)
+                confeat = self.ConFeat(temporal_patch[:, :, -1, :, :].unsqueeze(dim=1)) # give current frame to network
+                temporal_network_res = torch.cat((avfeat, confeat), dim=1)
+            elif self.temporal_network == "avfeat_confeat_tdr":
+                avfeat = self.AvFeat(temporal_patch)
+                confeat = self.ConFeat(temporal_patch[:, :, -1, :, :].unsqueeze(dim=1)) # give current frame to network
+                tdr = self.TDR(temporal_patch.squeeze(dim=1))
+                temporal_network_res = torch.cat((avfeat, confeat), dim=1)
+                temporal_network_res = torch.cat((temporal_network_res, tdr), dim=1)
             elif self.temporal_network == 'avfeat_tdr':
                 avfeat = self.AvFeat(temporal_patch)
                 tdr = self.TDR(temporal_patch.squeeze(dim=1))
@@ -110,10 +128,12 @@ class FgNet(nn.Module):
         # encoding path
         e1 = self.enc1(inp)
         e2 = self.enc2(e1)
-        d1 = self.dec1(e2)
+        e3 = self.enc3(e2)
+        d1 = self.dec1(e3)
         d2 = self.dec2(d1)
+        d3 = self.dec3(d2)
 
-        res = self.out(d2)
+        res = self.out(d3)
 
         return res
 

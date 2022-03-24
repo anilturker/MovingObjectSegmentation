@@ -30,12 +30,12 @@ def print_debug(s):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='BSUV-Net-2.0 pyTorch')
-    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unetvgg16',
+    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='sparse_unet',
                         help='Which network to use. unetvgg16, unet_attention, unet3d, sparse_unet, '
                              'R2AttU, SEnDec_cnn_lstm')
 
     parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network',
-                        default='avfeat_confeat_tdr',
+                        default='avfeat_confeat',
                         help='Which temporal network will use. no, avfeat, tdr, avfeat_confeat, '
                              'avfeat_confeat_tdr, avfeat')
 
@@ -67,7 +67,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', metavar='Minibatch size', dest='batch_size', type=int, default=1,
                         help='Number of samples per minibatch')
     parser.add_argument('--loss', metavar='Loss function to be used', dest='loss', type=str,
-                        default='focal-tversky-loss',
+                        default='jaccard',
                         help='Loss function to be used ce for cross-entropy, focal-loss, tversky-loss'
                              'focal-tversky-loss or jaccard')
     parser.add_argument('--opt', metavar='Optimizer to be used', dest='opt', type=str, default='adam',

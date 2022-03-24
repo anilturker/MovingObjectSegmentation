@@ -211,3 +211,68 @@ class TDR(nn.Module):
 
         return out
 
+
+class M_FPM(nn.Module):
+    """
+
+    """
+    def __init__(self, in_ch, out_ch, kernel_size):
+        super().__init__()
+
+        in_ch_for_conv = in_ch
+        self.fpm_block_1 = nn.Sequential()
+        #self.fpm_block_1.add_module("zero pad", nn.ZeroPad2d((0, 1, 0, 1)))
+        #self.fpm_block_1.add_module("pool", nn.MaxPool2d(kernel_size=(2,2), stride=(1, 1)))
+        self.fpm_block_1.add_module("conv2d", nn.Conv2d(in_ch_for_conv, out_ch,
+                                                        kernel_size=(1, 1)))
+
+        self.fpm_block_2 = nn.Sequential()
+        self.fpm_block_2.add_module("conv2d", nn.Conv2d(in_ch_for_conv, out_ch,
+                                                        kernel_size=kernel_size, padding=(int((kernel_size - 1)/2))))
+
+        in_ch_for_conv = in_ch + out_ch
+        dilation = 4
+        self.fpm_block_3 = nn.Sequential()
+        self.fpm_block_3.add_module("act", nn.ReLU())
+        self.fpm_block_3.add_module("conv2d", nn.Conv2d(in_ch_for_conv, out_ch,
+                                                        kernel_size=kernel_size, dilation=dilation,
+                                                        padding=dilation))
+        in_ch_for_conv = in_ch + out_ch
+        dilation = 8
+        self.fpm_block_4 = nn.Sequential()
+        self.fpm_block_4.add_module("act", nn.ReLU())
+        self.fpm_block_4.add_module("conv2d", nn.Conv2d(in_ch_for_conv, out_ch,
+                                                        kernel_size=kernel_size, dilation=dilation,
+                                                        padding=dilation))
+        in_ch_for_conv = in_ch + out_ch
+        dilation = 16
+        self.fpm_block_5 = nn.Sequential()
+        self.fpm_block_5.add_module("act", nn.ReLU())
+        self.fpm_block_5.add_module("conv2d", nn.Conv2d(in_ch_for_conv, out_ch,
+                                                        kernel_size=kernel_size, dilation=dilation,
+                                                        padding=dilation))
+
+        self.fpm_out_block = nn.Sequential()
+        self.fpm_out_block.add_module("inst_norm", nn.InstanceNorm2d(in_ch))
+        self.fpm_out_block.add_module("act", nn.ReLU())
+        self.fpm_out_block.add_module("dropout", nn.Dropout2d(0.25))
+
+    def forward(self, inp):
+        res_1 = self.fpm_block_1(inp)
+        res_2 = self.fpm_block_2(inp)
+
+        merged = torch.cat([inp, res_2], dim=1)
+        res_3 = self.fpm_block_3(merged)
+
+        merged = torch.cat([inp, res_3], dim=1)
+        res_4 = self.fpm_block_4(merged)
+
+        merged = torch.cat([inp, res_4], dim=1)
+        res_5 = self.fpm_block_5(merged)
+
+        merged = torch.cat([res_1, res_2, res_3, res_4, res_5], dim=1)
+        fpm_out = self.fpm_out_block(merged)
+
+        return fpm_out
+
+
