@@ -4,10 +4,12 @@ from models.convlstm_network import ConvLSTMBlock
 
 
 class conv_block_3d(nn.Module):
-    def __init__(self, ch_in, ch_out, kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(0, 0, 0)):
+    def __init__(self, ch_in, ch_out, kernel_size=(3, 3, 3), stride=(1, 1, 1),
+                 dilation=(1,1,1), padding=(0, 0, 0)):
         super(conv_block_3d,self).__init__()
         self.conv = nn.Sequential(
-            nn.Conv3d(ch_in, ch_out, kernel_size=kernel_size, stride=stride, padding=padding, bias=True),
+            nn.Conv3d(ch_in, ch_out, kernel_size=kernel_size, stride=stride,
+                      dilation=dilation, padding=padding, bias=True),
             nn.BatchNorm3d(ch_out),
             nn.ReLU(inplace=True),
         )
@@ -186,6 +188,9 @@ class TDR(nn.Module):
 
         # self.tdr_layer_4 = conv_block(8, 1, maxpool=False, kernel_size=(3, 3), stride=1, padding=1)
 
+        # Apply weight initialization
+        self.apply(self.weight_init)
+
     def forward(self, inp):
 
         x1_1 = self.tdr_layer_1_1(inp)
@@ -253,9 +258,12 @@ class M_FPM(nn.Module):
                                                         padding=dilation))
 
         self.fpm_out_block = nn.Sequential()
-        self.fpm_out_block.add_module("inst_norm", nn.InstanceNorm2d(in_ch))
+        self.fpm_out_block.add_module("inst_norm", nn.BatchNorm2d(in_ch))
         self.fpm_out_block.add_module("act", nn.ReLU())
         self.fpm_out_block.add_module("dropout", nn.Dropout2d(0.25))
+
+        # Apply weight initialization
+        self.apply(self.weight_init)
 
     def forward(self, inp):
         res_1 = self.fpm_block_1(inp)
@@ -276,3 +284,84 @@ class M_FPM(nn.Module):
         return fpm_out
 
 
+class AvShortFeat(nn.Module):
+
+    @staticmethod
+    def weight_init(m):
+        if isinstance(m, nn.Conv2d):
+            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+            nn.init.constant_(m.bias.data, 0)
+        elif isinstance(m, nn.Conv3d):
+            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+            nn.init.constant_(m.bias.data, 0)
+        elif isinstance(m, nn.Linear):
+            nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
+            nn.init.constant_(m.bias.data, 0)
+
+    def __init__(self, filter_size):
+        super().__init__()
+
+        self.conv3D11 = conv_block_3d(1, 64, kernel_size=(6, 3, 3), stride=(1, 1, 1),
+                                      dilation=(1, 1, 1), padding=(0, 1, 1))
+        self.conv3D12 = conv_block_3d(1, 64, kernel_size=(6, 3, 3), stride=(1, 1, 1),
+                                      dilation=(1, 1, 1), padding=(0, 1, 1))
+        self.conv3D13 = conv_block_3d(1, 64, kernel_size=(6, 3, 3), stride=(1, 1, 1),
+                                      dilation=(1, 1, 1), padding=(0, 1, 1))
+
+        self.conv3D14 = conv_block_3d(64, 128, kernel_size=(2, 3, 3), stride=(1, 1, 1),
+                                      dilation=(1, 2, 2), padding=(0, 2, 2))
+        self.conv3D15 = conv_block_3d(64, 128, kernel_size=(2, 3, 3), stride=(1, 1, 1),
+                                      dilation=(1, 2, 2), padding=(0, 2, 2))
+
+        self.conv3D16 = conv_block_3d(128, 256, kernel_size=(2, 3, 3), stride=(1, 1, 1),
+                                      dilation=(1, 4, 4), padding=(0, 4, 4))
+
+        self.conv3D21 = conv_block_3d(1, 64, kernel_size=(3, 3, 3), stride=(1, 1, 1),
+                                      dilation=(4, 1, 1), padding=(0, 1, 1))
+        self.conv3D22 = conv_block_3d(64, 128, kernel_size=(2, 3, 3), stride=(1, 1, 1),
+                                      dilation=(2, 2, 2), padding=(0, 2, 2))
+        self.conv3D23 = conv_block_3d(128, 256, kernel_size=(2, 3, 3), stride=(1, 1, 1),
+                                      dilation=(1, 4, 4), padding=(0, 4, 4))
+
+        self.conv3D31 = conv_block_3d(256, 256, kernel_size=(2, 3, 3), stride=(1, 1, 1),
+                                      dilation=(1, 1, 1), padding=(0, 1, 1))
+
+        # Temporal depth 10
+        self.conv2d_1 = conv_block(256, 128, maxpool=False, kernel_size=(3, 3), stride=1, padding=1)
+        self.conv2d_2 = conv_block(128, 64, maxpool=False, kernel_size=(3, 3), stride=1, padding=1)
+        self.conv2d_3 = conv_block(64, 32, maxpool=False, kernel_size=(3, 3), stride=1, padding=1)
+        self.conv2d_4 = conv_block(32, filter_size, maxpool=False, kernel_size=(3, 3), stride=1, padding=1)
+
+        # Apply weight initialization
+        self.apply(self.weight_init)
+
+    def forward(self, inp):
+        x1_1 = self.conv3D11(inp[:, :, :6])
+        x1_2 = self.conv3D12(inp[:, :, 3:9])
+        x1_3 = self.conv3D13(inp[:, :, 6:])
+
+        fused_1_1 = torch.cat((x1_1, x1_2), dim=2)
+        fused_1_2 = torch.cat((x1_2, x1_3), dim=2)
+
+        x1_4 = self.conv3D14(fused_1_1)
+        x1_5 = self.conv3D14(fused_1_2)
+
+        fused_2 = torch.cat((x1_4, x1_5), dim=2)
+        x1_6 = self.conv3D16(fused_2)
+
+        x2_1 = self.conv3D21(inp)
+        x2_2 = self.conv3D22(x2_1)
+        x2_3 = self.conv3D23(x2_2)
+
+        fused_3 = torch.cat((x1_6, x2_3), dim=2)
+        x_3 = self.conv3D31(fused_3)
+
+        x_3 = x_3.squeeze(dim=2)
+
+        x = self.conv2d_1(x_3)
+        x = self.conv2d_2(x)
+        x = self.conv2d_3(x)
+
+        out = self.conv2d_4(x)
+
+        return out

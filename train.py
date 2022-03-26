@@ -30,7 +30,7 @@ def print_debug(s):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='BSUV-Net-2.0 pyTorch')
-    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='sparse_unet',
+    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unetvgg16',
                         help='Which network to use. unetvgg16, unet_attention, unet3d, sparse_unet, '
                              'R2AttU, SEnDec_cnn_lstm')
 

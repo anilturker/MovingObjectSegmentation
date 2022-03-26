@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from models.temporal_networks import AvFeat, TDR, ConFeat
+from models.temporal_networks import AvFeat, TDR, ConFeat, AvShortFeat
 
 
 class conv_block(nn.Module):
@@ -68,6 +68,7 @@ class FgNet(nn.Module):
 
         if 'avfeat' in self.temporal_network:
             self.AvFeat = AvFeat(filter_size=filter_size)
+            self.AvShortFeat = AvShortFeat(filter_size=filter_size)
             inp_ch = inp_ch + filter_size
 
         if 'confeat' in self.temporal_network:
@@ -107,7 +108,8 @@ class FgNet(nn.Module):
             elif self.temporal_network == 'tdr':
                 temporal_network_res = self.TDR(temporal_patch.squeeze(dim=1))
             elif self.temporal_network == "avfeat_confeat":
-                avfeat = self.AvFeat(temporal_patch)
+                #avfeat = self.AvFeat(temporal_patch)
+                avfeat = self.AvShortFeat(temporal_patch)
                 confeat = self.ConFeat(temporal_patch[:, :, -1, :, :].unsqueeze(dim=1)) # give current frame to network
                 temporal_network_res = torch.cat((avfeat, confeat), dim=1)
             elif self.temporal_network == "avfeat_confeat_tdr":
