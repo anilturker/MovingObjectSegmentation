@@ -29,15 +29,14 @@ def print_debug(s):
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='BSUV-Net-2.0 pyTorch')
+    parser = argparse.ArgumentParser(description='MOS-Net pyTorch')
     parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unetvgg16',
                         help='Which network to use. unetvgg16, unet_attention, unet3d, sparse_unet, '
                              'R2AttU, SEnDec_cnn_lstm')
 
     parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network',
-                        default='avfeat_confeat',
-                        help='Which temporal network will use. no, avfeat, tdr, avfeat_confeat, '
-                             'avfeat_confeat_tdr, avfeat')
+                        default='avfeat_fpm',
+                        help='Add which temporal network will use. avfeat, confeat, fpm, tdr')
 
     # Input images
     parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
@@ -92,17 +91,17 @@ if __name__ == '__main__':
                         default=8, help='Kernel size of temporal network')
 
     # Checkpoint
-    parser.add_argument('--model_chk', metavar='Checkpoint for the model', dest='model_chk', type=int, default=0,
+    parser.add_argument('--model_chk', metavar='Checkpoint for the model', dest='model_chk', type=int, default=1,
                         help='Whether to use checkpoint, 0 or 1')
 
     # Cross-validation
     parser.add_argument('--set_number', metavar='Which training-test split to use from config file', dest='set_number',
-                        type=int, default=6
+                        type=int, default=5
                         , help='Training and test videos will be selected based on the set number')
 
     # Model name
     parser.add_argument('--model_name', metavar='Name of the model for log keeping', dest='model_name',
-                        type=str, default='BSUV-Net 2.0',
+                        type=str, default='MOS-Net',
                         help='Name of the model to be used in output csv and checkpoints')
 
     args = parser.parse_args()
@@ -150,7 +149,9 @@ if __name__ == '__main__':
     save_dir = data_config.save_dir
 
     # naming for log keeping
-    fname = args.model_name + "_network_" + network
+    fname = args.model_name + "_fusion_net_" + network + "_temporal_net_" + temporal_network + "_" \
+            + "inp_selection_" + str(1 * (empty_bg != "no")) + str(1 * recent_bg) + str(1 * seg_ch) \
+            + str(1 * use_flux_tensor) + str(1 * current_fr)
 
     print(f"Model started: {fname}")
 
@@ -305,6 +306,7 @@ if __name__ == '__main__':
             best_f = checkpoint['best_f']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
+            lr = optimizer.param_groups[0]["lr"]
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(model_chk, checkpoint['epoch']))
 
@@ -381,6 +383,10 @@ if __name__ == '__main__':
                     best_f = epoch_f
                     torch.save(model, f"{mdl_dir}/model_best.mdl")
 
+            # Learning rate scheduler
+            if phase.startswith("Train"):
+                scheduler.step(epoch_loss)
+
             # Save the checkpoint
             checkpoint = {
                 "epoch": epoch + 1,
@@ -402,8 +408,6 @@ if __name__ == '__main__':
                                {'epoch_loss': epoch_loss, 'epoch_acc': epoch_acc, 'epoch_f': epoch_f})
 
             st = time.time()
-
-        scheduler.step(epoch_loss)
 
     # save the last model
     torch.save(model, f"{mdl_dir}/model_last.mdl")

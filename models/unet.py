@@ -4,8 +4,7 @@
 import torch
 import torch.nn as nn
 from models.unet_tools import UNetDown, UNetUp, ConvSig
-from models.temporal_networks import AvFeat, TDR, ConFeat, AvShortFeat
-from models.convlstm_network import ConvLSTMBlock
+from models.temporal_networks import AvFeat, TDR, ConFeat, AvShortFeat, M_FPM
 
 class unet_vgg16(nn.Module):
     """
@@ -39,6 +38,10 @@ class unet_vgg16(nn.Module):
             self.AvFeat = AvFeat(filter_size=filter_size)
             self.AvShortFeat = AvShortFeat(filter_size=filter_size)
             inp_ch = inp_ch + filter_size * 2
+
+        if 'fpm' in self.temporal_network:
+            self.FPM = M_FPM(filter_size=filter_size)
+            inp_ch = inp_ch + filter_size
 
         if 'confeat' in self.temporal_network:
             self.ConFeat = ConFeat(filter_size=filter_size)
@@ -84,33 +87,21 @@ class unet_vgg16(nn.Module):
                                               dtype=torch.float).unsqueeze(dim=1)
                 curr_patch = torch.tensor(inp[:, :temporal_network_first_index], dtype=torch.float)
 
-            if self.temporal_network in "avfeat":
-                avfeat = self.AvFeat(temporal_patch)
-                avshortfeat = self.AvShortFeat(temporal_patch[:, :, -12:])
-                temporal_network_res = torch.cat((avfeat, avshortfeat), dim=1)
-            elif self.temporal_network == 'tdr':
-                temporal_network_res = self.TDR(temporal_patch.squeeze(dim=1))
-            elif self.temporal_network == "avfeat_confeat":
-                avfeat = self.AvFeat(temporal_patch)
-                avshortfeat = self.AvShortFeat(temporal_patch[:, :, -12:])
-                confeat = self.ConFeat(temporal_patch[:, :, -1, :, :].unsqueeze(dim=1))  # give current frame to network
-                temporal_network_res = torch.cat((avfeat, avshortfeat, confeat), dim=1)
-            elif self.temporal_network == "avfeat_confeat_tdr":
-                avfeat = self.AvFeat(temporal_patch)
-                avshortfeat = self.AvShortFeat(temporal_patch[:, :, -12:])
-                confeat = self.ConFeat(temporal_patch[:, :, -1, :, :].unsqueeze(dim=1)) # give current frame to network
-                tdr = self.TDR(temporal_patch.squeeze(dim=1))
-                temporal_network_res = torch.cat((avfeat, avshortfeat, confeat), dim=1)
-                temporal_network_res = torch.cat((temporal_network_res, tdr), dim=1)
-            elif self.temporal_network == 'avfeat_tdr':
-                avfeat = self.AvFeat(temporal_patch)
-                avshortfeat = self.AvShortFeat(temporal_patch[:, :, -12:])
-                tdr = self.TDR(temporal_patch.squeeze(dim=1))
-                temporal_network_res = torch.cat((avfeat, avshortfeat, tdr), dim=1)
-            else:
-                raise ValueError(f"temporal network = {self.temporal_network} is not defined")
+            inp = curr_patch
 
-            inp = torch.cat((curr_patch, temporal_network_res), dim=1)
+            if "avfeat" in self.temporal_network:
+                avfeat = self.AvFeat(temporal_patch)
+                avshortfeat = self.AvShortFeat(temporal_patch[:, :, -12:])
+                inp = torch.cat((inp, avfeat, avshortfeat), dim=1)
+            if 'tdr' in self.temporal_network:
+                tdr = self.TDR(temporal_patch.squeeze(dim=1))
+                inp = torch.cat((inp, tdr), dim=1)
+            if 'confeat' in self.temporal_network:
+                confeat = self.ConFeat(temporal_patch[:, :, -1, :, :].unsqueeze(dim=1))  # give current frame to network
+                inp = torch.cat((inp, confeat), dim=1)
+            if 'fpm' in self.temporal_network:
+                fpm = self.FPM(temporal_patch[:, :, -1, :, :])  # give current frame to network
+                inp = torch.cat((inp, fpm), dim=1)
 
         d1 = self.enc1(inp)
         d2 = self.enc2(d1)

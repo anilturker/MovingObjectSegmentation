@@ -3,6 +3,21 @@ import torch.nn as nn
 from models.convlstm_network import ConvLSTMBlock
 
 
+def weight_init(m):
+    if isinstance(m, nn.Conv2d):
+        nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+        if m.bias is not None:
+            nn.init.constant_(m.bias.data, 0)
+    elif isinstance(m, nn.Conv3d):
+        nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+        if m.bias is not None:
+            nn.init.constant_(m.bias.data, 0)
+    elif isinstance(m, nn.Linear):
+        nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
+        if m.bias is not None:
+            nn.init.constant_(m.bias.data, 0)
+
+
 class conv_block_3d(nn.Module):
     def __init__(self, ch_in, ch_out, kernel_size=(3, 3, 3), stride=(1, 1, 1),
                  dilation=(1,1,1), padding=(0, 0, 0)):
@@ -37,18 +52,6 @@ class conv_block(nn.Module):
 
 class AvFeat(nn.Module):
 
-    @staticmethod
-    def weight_init(m):
-        if isinstance(m, nn.Conv2d):
-            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
-            nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, nn.Conv3d):
-            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
-            nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, nn.Linear):
-            nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
-            nn.init.constant_(m.bias.data, 0)
-
     def __init__(self, filter_size):
         super().__init__()
         self.conv1_5x5 = conv_block_3d(1, filter_size, kernel_size=(3, 5, 5), stride=(5, 1, 1), padding=(0, 2, 2))
@@ -71,6 +74,9 @@ class AvFeat(nn.Module):
         self.conv3_avg_1x1 = conv_block_3d(int(filter_size * 3), int(filter_size), 1, stride=(1, 1, 1), padding=0)
 
         self.convlstm_block = ConvLSTMBlock(filter_size*3, filter_size, kernel_size=3, padding=1)
+
+        # Apply weight initialization
+        self.apply(weight_init)
 
     def forward(self, inp):
         x1_1 = self.conv1_5x5(inp)
@@ -111,24 +117,15 @@ class AvFeat(nn.Module):
 
 class ConFeat(nn.Module):
 
-    @staticmethod
-    def weight_init(m):
-        if isinstance(m, nn.Conv2d):
-            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
-            nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, nn.Conv3d):
-            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
-            nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, nn.Linear):
-            nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
-            nn.init.constant_(m.bias.data, 0)
-
     def __init__(self, filter_size):
         super().__init__()
 
         self.conv1_5x5 = conv_block_3d(1, filter_size, kernel_size=(1, 5, 5), stride=(1, 1, 1), padding=(0, 2, 2))
         self.conv1_3x3 = conv_block_3d(1, filter_size, kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1))
         self.conv1_1x1 = conv_block_3d(1, filter_size, kernel_size=(1, 1, 1), stride=(1, 1, 1), padding=0)
+
+        # Apply weight initialization
+        self.apply(weight_init)
 
     def forward(self, inp):
 
@@ -145,19 +142,6 @@ class ConFeat(nn.Module):
         return out
 
 class TDR(nn.Module):
-
-    @staticmethod
-    def weight_init(m):
-        if isinstance(m, nn.Conv2d):
-            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
-            nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, nn.Conv3d):
-            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
-            nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, nn.Linear):
-            nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
-            nn.init.constant_(m.bias.data, 0)
-
     """
     implements:
         background estimation using temporal depth reduction
@@ -221,49 +205,50 @@ class M_FPM(nn.Module):
     """
 
     """
-    def __init__(self, in_ch, out_ch, kernel_size):
+    def __init__(self, filter_size=8):
         super().__init__()
 
+        in_ch = 1
         in_ch_for_conv = in_ch
         self.fpm_block_1 = nn.Sequential()
         #self.fpm_block_1.add_module("zero pad", nn.ZeroPad2d((0, 1, 0, 1)))
         #self.fpm_block_1.add_module("pool", nn.MaxPool2d(kernel_size=(2,2), stride=(1, 1)))
-        self.fpm_block_1.add_module("conv2d", nn.Conv2d(in_ch_for_conv, out_ch,
+        self.fpm_block_1.add_module("conv2d", nn.Conv2d(in_ch_for_conv, filter_size,
                                                         kernel_size=(1, 1)))
 
         self.fpm_block_2 = nn.Sequential()
-        self.fpm_block_2.add_module("conv2d", nn.Conv2d(in_ch_for_conv, out_ch,
-                                                        kernel_size=kernel_size, padding=(int((kernel_size - 1)/2))))
+        self.fpm_block_2.add_module("conv2d", nn.Conv2d(in_ch_for_conv, filter_size,
+                                                        kernel_size=(3, 3), padding=(1, 1)))
 
-        in_ch_for_conv = in_ch + out_ch
-        dilation = 4
+        in_ch_for_conv += filter_size
+        dilation = (4, 4)
         self.fpm_block_3 = nn.Sequential()
         self.fpm_block_3.add_module("act", nn.ReLU())
-        self.fpm_block_3.add_module("conv2d", nn.Conv2d(in_ch_for_conv, out_ch,
-                                                        kernel_size=kernel_size, dilation=dilation,
+        self.fpm_block_3.add_module("conv2d", nn.Conv2d(in_ch_for_conv, filter_size,
+                                                        kernel_size=(3, 3), dilation=dilation,
                                                         padding=dilation))
-        in_ch_for_conv = in_ch + out_ch
-        dilation = 8
+        dilation = (8, 8)
         self.fpm_block_4 = nn.Sequential()
         self.fpm_block_4.add_module("act", nn.ReLU())
-        self.fpm_block_4.add_module("conv2d", nn.Conv2d(in_ch_for_conv, out_ch,
-                                                        kernel_size=kernel_size, dilation=dilation,
+        self.fpm_block_4.add_module("conv2d", nn.Conv2d(in_ch_for_conv, filter_size,
+                                                        kernel_size=(3, 3), dilation=dilation,
                                                         padding=dilation))
-        in_ch_for_conv = in_ch + out_ch
-        dilation = 16
+        dilation = (16, 16)
         self.fpm_block_5 = nn.Sequential()
         self.fpm_block_5.add_module("act", nn.ReLU())
-        self.fpm_block_5.add_module("conv2d", nn.Conv2d(in_ch_for_conv, out_ch,
-                                                        kernel_size=kernel_size, dilation=dilation,
+        self.fpm_block_5.add_module("conv2d", nn.Conv2d(in_ch_for_conv, filter_size,
+                                                        kernel_size=(3, 3), dilation=dilation,
                                                         padding=dilation))
 
+        in_ch_for_conv = filter_size * 5
         self.fpm_out_block = nn.Sequential()
-        self.fpm_out_block.add_module("inst_norm", nn.BatchNorm2d(in_ch))
+        self.fpm_out_block.add_module("conv2d", nn.Conv2d(in_ch_for_conv, filter_size, kernel_size=(1, 1)))
+        self.fpm_out_block.add_module("inst_norm", nn.BatchNorm2d(filter_size))
         self.fpm_out_block.add_module("act", nn.ReLU())
         self.fpm_out_block.add_module("dropout", nn.Dropout2d(0.25))
 
         # Apply weight initialization
-        self.apply(self.weight_init)
+        self.apply(weight_init)
 
     def forward(self, inp):
         res_1 = self.fpm_block_1(inp)
@@ -285,18 +270,6 @@ class M_FPM(nn.Module):
 
 
 class AvShortFeat(nn.Module):
-
-    @staticmethod
-    def weight_init(m):
-        if isinstance(m, nn.Conv2d):
-            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
-            nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, nn.Conv3d):
-            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
-            nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, nn.Linear):
-            nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
-            nn.init.constant_(m.bias.data, 0)
 
     def __init__(self, filter_size):
         super().__init__()
@@ -333,7 +306,7 @@ class AvShortFeat(nn.Module):
         self.conv2d_4 = conv_block(32, filter_size, maxpool=False, kernel_size=(3, 3), stride=1, padding=1)
 
         # Apply weight initialization
-        self.apply(self.weight_init)
+        self.apply(weight_init)
 
     def forward(self, inp):
         x1_1 = self.conv3D11(inp[:, :, :6])
