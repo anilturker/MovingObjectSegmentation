@@ -57,7 +57,7 @@ if __name__ == '__main__':
 
 
     # Optimization
-    parser.add_argument('--lr', metavar='Learning Rate', dest='lr', type=float, default=1e-3,
+    parser.add_argument('--lr', metavar='Learning Rate', dest='lr', type=float, default=1e-4,
                         help='learning rate of the optimization')
     parser.add_argument('--weight_decay', metavar='weight_decay', dest='weight_decay', type=float, default=1e-2,
                         help='weight decay of the optimization')
@@ -306,7 +306,7 @@ if __name__ == '__main__':
             best_f = checkpoint['best_f']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
-            lr = optimizer.param_groups[0]["lr"]
+            optimizer.param_groups[0]["lr"] = lr
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(model_chk, checkpoint['epoch']))
 
@@ -371,7 +371,8 @@ if __name__ == '__main__':
             epoch_f = running_f / len(tensorloader)
 
             print("::%s:: Epoch %d loss: %.3f, acc: %.3f, f_score: %.3f, lr : %.6f, elapsed time: %s" \
-                  % (phase, epoch + 1, epoch_loss, epoch_acc, epoch_f,  lr, (time.time() - st)))
+                  % (phase, epoch + 1, epoch_loss, epoch_acc, epoch_f,  optimizer.param_groups[0]["lr"],
+                     (time.time() - st)))
 
             writer.add_scalar(f"{phase}/loss", epoch_loss, epoch)
             writer.add_scalar(f"{phase}/acc", epoch_acc, epoch)
