@@ -5,7 +5,7 @@ U-Net model with attention module
 import torch
 import torch.nn as nn
 
-from models.unet_tools import UNetDown, UNetUp, ConvSig, FCNN
+from models.network_tools import UNetDown, UNetUp, ConvSig, FCNN
 from models.temporal_networks import AvFeat, TDR
 
 

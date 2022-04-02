@@ -12,6 +12,7 @@ from utils.data_loader import CDNet2014Loader
 from utils import losses
 from models.unet import unet_vgg16
 from models.unet_3d import UNet_3D
+from models.dfr_net import DFR
 from models.unet_attention import AttU_Net, R2AttU_Net
 from models.convlstm_network import SEnDec_cnn_lstm
 from models.sparse_unet import FgNet
@@ -30,13 +31,13 @@ def print_debug(s):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='MOS-Net pyTorch')
-    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unetvgg16',
+    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='3dfr',
                         help='Which network to use. unetvgg16, unet_attention, unet3d, sparse_unet, '
-                             'R2AttU, SEnDec_cnn_lstm')
+                             '3dfr, R2AttU, SEnDec_cnn_lstm')
 
     parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network',
-                        default='avfeat_fpm',
-                        help='Add which temporal network will use. avfeat, confeat, fpm, tdr')
+                        default='no',
+                        help='Add which temporal network will use(avfeat, confeat, fpm, tdr). Otherwise use no')
 
     # Input images
     parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
@@ -129,7 +130,7 @@ if __name__ == '__main__':
     temporal_length = args.temporal_history
     temporal_kernel_size = args.temporal_kernel_size
 
-    use_temporal_network = True if temporal_network != 'no' else False
+    use_temporal_network = True if temporal_network != 'no' or network == '3dfr' else False
 
     aug_noise = args.aug_noise
     aug_rsc = args.aug_rsc
@@ -246,6 +247,9 @@ if __name__ == '__main__':
     elif network.startswith("sparse_unet"):
         model = FgNet(inp_ch=num_ch, temporal_network=temporal_network, temporal_length=temporal_length,
                          filter_size=temporal_kernel_size)
+    if network == "3dfr":
+        model = DFR(inp_ch=num_ch, kernel_size=3, skip=1, temporal_length=temporal_length,
+                    filter_size=temporal_kernel_size)
     elif network.startswith('R2AttU'):
         model = R2AttU_Net(inp_ch=num_ch, temporal_network=temporal_network, temporal_length=temporal_length,
                          filter_size=temporal_kernel_size)
@@ -330,7 +334,7 @@ if __name__ == '__main__':
 
                 if phase == "Train":
                     # get the inputs; data is a list of [inputs, labels]
-                    if temporal_network == 'no':
+                    if use_temporal_network is False:
                         inputs, labels = data[0].float(), data[1].float()
                     else:
                         inputs, labels = torch.cat((data[0], data[1]), dim=1), data[2].float()

@@ -3,7 +3,7 @@
 """
 import torch
 import torch.nn as nn
-from models.unet_tools import UNetDown, UNetUp, ConvSig
+from models.network_tools import UNetDown, UNetUp, ConvSig, weight_init
 from models.temporal_networks import AvFeat, TDR, ConFeat, AvShortFeat, M_FPM
 
 class unet_vgg16(nn.Module):
@@ -13,19 +13,6 @@ class unet_vgg16(nn.Module):
         kernel_size (int): Size of the convolutional kernels
         skip (bool, default=True): Use skip connections
     """
-    @staticmethod
-    def weight_init(m):
-        if isinstance(m, nn.Conv2d):
-            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
-            if m.bias is not None:
-                nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, nn.Conv3d):
-            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
-            nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, nn.Linear):
-            nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
-            nn.init.constant_(m.bias.data, 0)
-
 
     def __init__(self, inp_ch, temporal_network, temporal_length, filter_size, kernel_size=3, skip=True):
         super().__init__()
@@ -66,7 +53,7 @@ class unet_vgg16(nn.Module):
         self.frozenLayers = [self.enc1, self.enc2, self.enc3]
 
         # Apply weight initialization
-        self.apply(self.weight_init)
+        self.apply(weight_init)
 
     def forward(self, inp):
         """

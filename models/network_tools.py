@@ -1,6 +1,54 @@
 import torch
 import torch.nn as nn
 
+
+def weight_init(m):
+    if isinstance(m, nn.Conv2d):
+        nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+        if m.bias is not None:
+            nn.init.constant_(m.bias.data, 0)
+    elif isinstance(m, nn.Conv3d):
+        nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+        if m.bias is not None:
+            nn.init.constant_(m.bias.data, 0)
+    elif isinstance(m, nn.Linear):
+        nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
+        if m.bias is not None:
+            nn.init.constant_(m.bias.data, 0)
+
+
+class conv_block_3d(nn.Module):
+    def __init__(self, ch_in, ch_out, kernel_size=(3, 3, 3), stride=(1, 1, 1),
+                 dilation=(1,1,1), padding=(0, 0, 0)):
+        super(conv_block_3d,self).__init__()
+        self.conv = nn.Sequential(
+            nn.Conv3d(ch_in, ch_out, kernel_size=kernel_size, stride=stride,
+                      dilation=dilation, padding=padding, bias=True),
+            nn.BatchNorm3d(ch_out),
+            nn.ReLU(inplace=True),
+        )
+
+    def forward(self,x):
+        x = self.conv(x)
+        return x
+
+
+class conv_block(nn.Module):
+    def __init__(self,ch_in, ch_out, maxpool, kernel_size, stride, padding):
+        super(conv_block,self).__init__()
+        self.conv = nn.Sequential()
+        self.conv.add_module("conv2d", nn.Conv2d(ch_in, ch_out, kernel_size=kernel_size, stride=stride, padding=padding,
+                                       bias=True))
+        if maxpool:
+            self.conv.add_module("maxpool2d", nn.MaxPool2d(kernel_size=2, stride=2))
+        self.conv.add_module("bn2d", nn.BatchNorm2d(ch_out))
+        self.conv.add_module("relu", nn.ReLU(inplace=True))
+
+    def forward(self, x):
+        x = self.conv(x)
+        return x
+
+
 class UNetDown(nn.Module):
     """ Encoder blocks of UNet
 
@@ -34,6 +82,7 @@ class UNetDown(nn.Module):
 
     def forward(self, inp):
         return self.down_block(inp)
+
 
 class UNetUp(nn.Module):
     """ Decoder blocks of UNet
