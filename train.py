@@ -349,7 +349,7 @@ if __name__ == '__main__':
                 else:
                     with torch.no_grad():
                         # get the inputs; data is a list of [inputs, labels]
-                        if temporal_network == 'no':
+                        if use_temporal_network is False:
                             inputs, labels = data[0].float(), data[1].float()
                         else:
                             inputs, labels = torch.cat((data[0], data[1]), dim=1), data[2].float()
