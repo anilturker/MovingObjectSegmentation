@@ -7,38 +7,7 @@ import torch.nn as nn
 
 from models.network_tools import UNetDown, UNetUp, ConvSig, FCNN
 from models.temporal_networks import AvFeat, TDR
-
-
-class conv_block(nn.Module):
-    def __init__(self,ch_in,ch_out):
-        super(conv_block,self).__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(ch_in, ch_out, kernel_size=3, stride=1, padding=1, bias=True),
-            nn.BatchNorm2d(ch_out),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(ch_out, ch_out, kernel_size=3, stride=1, padding=1, bias=True),
-            nn.BatchNorm2d(ch_out),
-            nn.ReLU(inplace=True)
-        )
-
-    def forward(self,x):
-        x = self.conv(x)
-        return x
-
-
-class up_conv(nn.Module):
-    def __init__(self,ch_in,ch_out):
-        super(up_conv,self).__init__()
-        self.up = nn.Sequential(
-            nn.Upsample(scale_factor=2),
-            nn.Conv2d(ch_in,ch_out,kernel_size=3,stride=1,padding=1,bias=True),
-		    nn.BatchNorm2d(ch_out),
-			nn.ReLU(inplace=True)
-        )
-
-    def forward(self,x):
-        x = self.up(x)
-        return x
+from models.network_tools import weight_init, conv_block, up_conv
 
 
 class Recurrent_block(nn.Module):
@@ -76,6 +45,7 @@ class RRCNN_block(nn.Module):
         x1 = self.RCNN(x)
         return x+x1
 
+
 class Attention_block(nn.Module):
     def __init__(self, F_g, F_l, F_int):
         super(Attention_block, self).__init__()
@@ -107,18 +77,6 @@ class Attention_block(nn.Module):
 
 
 class AttU_Net(nn.Module):
-
-    @staticmethod
-    def weight_init(m):
-        if isinstance(m, nn.Conv2d):
-            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
-            nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, nn.Conv3d):
-            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
-            nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, nn.Linear):
-            nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
-            nn.init.constant_(m.bias.data, 0)
 
     def __init__(self, inp_ch, temporal_network, temporal_length, filter_size):
         super(AttU_Net, self).__init__()
@@ -161,7 +119,7 @@ class AttU_Net(nn.Module):
         self.out = ConvSig(64)
 
         # Apply weight initialization
-        self.apply(self.weight_init)
+        self.apply(weight_init)
 
     def forward(self, inp):
 
@@ -231,18 +189,6 @@ class AttU_Net(nn.Module):
 
 class R2AttU_Net(nn.Module):
 
-    @staticmethod
-    def weight_init(m):
-        if isinstance(m, nn.Conv2d):
-            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
-            nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, nn.Conv3d):
-            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
-            nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, nn.Linear):
-            nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
-            nn.init.constant_(m.bias.data, 0)
-
     def __init__(self, inp_ch, temporal_network, temporal_length, filter_size, t=2):
         super(R2AttU_Net, self).__init__()
 
@@ -289,7 +235,7 @@ class R2AttU_Net(nn.Module):
         self.out = ConvSig(64)
 
         # Apply weight initialization
-        self.apply(self.weight_init)
+        self.apply(weight_init)
 
     def forward(self, inp):
 

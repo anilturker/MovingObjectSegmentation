@@ -18,18 +18,19 @@ def weight_init(m):
 
 
 class conv_block_3d(nn.Module):
-    def __init__(self, ch_in, ch_out, kernel_size=(3, 3, 3), stride=(1, 1, 1),
+    def __init__(self, ch_in, ch_out, batch_norm=True, activation=nn.ReLU(), kernel_size=(3, 3, 3), stride=(1, 1, 1),
                  dilation=(1,1,1), padding=(0, 0, 0)):
         super(conv_block_3d,self).__init__()
-        self.conv = nn.Sequential(
-            nn.Conv3d(ch_in, ch_out, kernel_size=kernel_size, stride=stride,
-                      dilation=dilation, padding=padding, bias=True),
-            nn.BatchNorm3d(ch_out),
-            nn.ReLU(inplace=True),
-        )
+        self.conv3d = nn.Sequential()
+        self.conv3d.add_module("conv3d", nn.Conv3d(ch_in, ch_out, kernel_size=kernel_size, stride=stride,
+                                                   padding=padding, bias=True))
+        if batch_norm:
+            self.conv3d.add_module("batchNorm3d", nn.BatchNorm3d(ch_out))
+
+        self.conv3d.add_module("act", activation)
 
     def forward(self,x):
-        x = self.conv(x)
+        x = self.conv3d(x)
         return x
 
 
@@ -47,6 +48,62 @@ class conv_block(nn.Module):
     def forward(self, x):
         x = self.conv(x)
         return x
+
+
+class up_conv(nn.Module):
+    def __init__(self,ch_in,ch_out):
+        super(up_conv,self).__init__()
+        self.up = nn.Sequential(
+            nn.ConvTranspose2d(ch_in, ch_out, kernel_size=3, stride=2, padding=0, bias=True),
+            nn.MaxPool2d(kernel_size=2, stride=1), nn.BatchNorm2d(ch_out), nn.ReLU(inplace=True))
+
+    def forward(self,x):
+        x = self.up(x)
+        return x
+
+
+class ConvLSTMBlock(nn.Module):
+
+    def __init__(self, in_channels, num_features, kernel_size=3, padding=1, stride=1):
+        super().__init__()
+        self.num_features = num_features
+        self.conv = self._make_layer(in_channels+num_features, num_features*4,
+                                       kernel_size, padding, stride)
+
+    def _make_layer(self, in_channels, out_channels, kernel_size, padding, stride):
+        return nn.Sequential(
+            nn.Conv2d(in_channels, out_channels,
+                      kernel_size=kernel_size, padding=padding, stride=stride, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU())
+
+    def forward(self, inputs):
+        '''
+        :param inputs: (B, C, S, H, W)
+        :param hidden_state: (hx: (B, S, C, H, W), cx: (B, S, C, H, W))
+        :return:
+        '''
+        outputs = []
+        B, C, S, H, W = inputs.shape
+        inputs = inputs.permute(0, 2, 1, 3, 4)  # (b, c, s, h, w) -> (b, s, c, h, w)
+        hx = torch.zeros(B, self.num_features, H, W).to(inputs.device)
+        cx = torch.zeros(B, self.num_features, H, W).to(inputs.device)
+        for t in range(S):
+            combined = torch.cat([inputs[:, t], # (B, C, H, W)
+                                  hx], dim=1)
+            gates = self.conv(combined)
+            ingate, forgetgate, cellgate, outgate = torch.split(gates, self.num_features, dim=1)
+            ingate = torch.sigmoid(ingate)
+            forgetgate = torch.sigmoid(forgetgate)
+            outgate = torch.sigmoid(outgate)
+
+            cy = (forgetgate * cx) + (ingate * cellgate)
+            hy = outgate * torch.tanh(cy)
+            outputs.append(hy)
+            hx = hy
+            cx = cy
+
+        return torch.stack(outputs).permute(1, 2, 0, 3, 4).contiguous() # (S, B, C, H, W) -> (B, C, S, H, W)
 
 
 class UNetDown(nn.Module):
@@ -135,6 +192,7 @@ class UNetUp(nn.Module):
             merged = torch.cat([feat, res], dim=1)
         return self.conv_block(merged)
 
+
 class ConvSig(nn.Module):
     """ Conv layer + Sigmoid
 
@@ -150,6 +208,7 @@ class ConvSig(nn.Module):
 
     def forward(self, inp):
         return self.out(inp)
+
 
 class FCNN(nn.Module):
     """ Fully connected Neural Network with Softmax in the end

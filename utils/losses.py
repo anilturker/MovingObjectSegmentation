@@ -29,13 +29,8 @@ def getValid(true, pred, nonvalid=-1):
     return torch.masked_select(true_valid, mask), torch.masked_select(pred_valid, mask)
 
 
-def binary_cross_entropy_loss(true, pred, smooth=100):
-    epsilon = 1e-7
-    loss = torch.tensor(epsilon)
-    bce = F.binary_cross_entropy_with_logits(pred, true).clamp(0, 1)
-    if not math.isnan(bce):
-        loss = (bce * smooth) + epsilon
-    return loss
+def binary_cross_entropy_loss(true, pred):
+    return F.binary_cross_entropy(pred, true)
 
 
 def jaccard_loss(true, pred, smooth=100):
@@ -62,7 +57,7 @@ def jaccard_loss(true, pred, smooth=100):
 
 
 # tversky loss
-def tverskyLoss(true, pred, alpha=0.3, beta=0.7, smooth=100):
+def tverskyLoss(true, pred, alpha=0.3, beta=0.7):
     epsilon = 1e-7
     loss = torch.tensor(epsilon)
 
@@ -73,29 +68,29 @@ def tverskyLoss(true, pred, alpha=0.3, beta=0.7, smooth=100):
     FP = torch.sum((1 - true) * pred)
     FN = torch.sum(true * (1 - pred))
 
-    tversky_loss = (TP + smooth) / (TP + alpha * FP + beta * FN + smooth)
+    tversky_loss = TP / (TP + alpha * FP + beta * FN)
     if not math.isnan(tversky_loss):
-        loss = (1 - tversky_loss) * smooth + epsilon
+        loss = (1 - tversky_loss) + epsilon
     return loss
 
 
 # calculate overall loss
-def tverskyLoss_bce_loss(true, pred, bceWeight=0.5, alpha=0.3, beta=0.7, smooth=100):
+def tverskyLoss_bce_loss(true, pred, bceWeight=0.5, alpha=0.3, beta=0.7):
     epsilon = 1e-7
 
-    bce = binary_cross_entropy_loss(pred, true, smooth)
-    tversky = tverskyLoss(pred, true, alpha, beta, smooth)
+    bce = binary_cross_entropy_loss(pred, true)
+    tversky = tverskyLoss(pred, true, alpha, beta)
 
     loss = bce * bceWeight + tversky * (1 - bceWeight) + epsilon
 
     return loss
 
 
-def focal_tversky_loss(true, pred, alpha=0.3, beta=0.7, smooth=100, gamma=0.75):
+def focal_tversky_loss(true, pred, alpha=0.3, beta=0.7, gamma=0.75):
     epsilon = 1e-7
     loss = torch.tensor(epsilon)
 
-    tv = tverskyLoss(true, pred, alpha, beta, smooth)
+    tv = tverskyLoss(true, pred, alpha, beta)
     if not math.isnan(tv):
         loss = torch.pow(tv, gamma) + epsilon
 

@@ -2,33 +2,7 @@ import torch
 import torch.nn as nn
 
 from models.temporal_networks import AvFeat, TDR, ConFeat, AvShortFeat
-
-
-class conv_block(nn.Module):
-    def __init__(self,ch_in, ch_out, kernel_size=3):
-        super(conv_block,self).__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(ch_in, ch_out, kernel_size=kernel_size, stride=1, padding=1, bias=True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.BatchNorm2d(ch_out),
-            nn.ReLU(inplace=True),
-        )
-
-    def forward(self, x):
-        x = self.conv(x)
-        return x
-
-
-class up_conv(nn.Module):
-    def __init__(self,ch_in,ch_out):
-        super(up_conv,self).__init__()
-        self.up = nn.Sequential(
-            nn.ConvTranspose2d(ch_in, ch_out, kernel_size=3, stride=2, padding=0, bias=True),
-            nn.MaxPool2d(kernel_size=2, stride=1), nn.BatchNorm2d(ch_out), nn.ReLU(inplace=True))
-
-    def forward(self,x):
-        x = self.up(x)
-        return x
+from models.network_tools import weight_init, conv_block, up_conv
 
 
 class ConvSig(nn.Module):
@@ -49,16 +23,6 @@ class ConvSig(nn.Module):
 
 
 class FgNet(nn.Module):
-    @staticmethod
-    def weight_init(m):
-        if isinstance(m, nn.Conv2d):
-            nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
-            if m.bias is not None:
-                nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, nn.Linear):
-            nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
-            nn.init.constant_(m.bias.data, 0)
-
 
     def __init__(self, inp_ch, temporal_network, temporal_length, filter_size):
         super().__init__()
@@ -89,7 +53,7 @@ class FgNet(nn.Module):
         self.out = ConvSig(16)
 
         # Apply weight initialization
-        self.apply(self.weight_init)
+        self.apply(weight_init)
 
     def forward(self, inp):
 

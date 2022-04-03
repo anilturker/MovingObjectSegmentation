@@ -9,38 +9,20 @@ This is a temporary script file.
 import torch
 import torch.nn as nn
 
-
-class Conv_block_3d(nn.Module):
-
-	def __init__(self, ch_in, ch_out, batch_norm=False, activation=nn.ReLU(), kernel_size=(3, 3, 3),
-				 stride = (1, 1, 1), padding = (0, 0, 0)):
-
-		super(Conv_block_3d,self).__init__()
-		self.conv3d = nn.Sequential()
-		self.conv3d.add_module("conv3d", nn.Conv3d(ch_in, ch_out, kernel_size=kernel_size, stride=stride,
-												   padding=padding, bias=True))
-		if batch_norm:
-			self.conv3d.add_module("batchNorm3d", nn.BatchNorm3d(ch_out))
-
-		self.conv3d.add_module("act", activation)
-
-	def forward(self,x):
-		x = self.conv3d(x)
-		return x
-
+from models.network_tools import conv_block_3d, ConvLSTMBlock
 
 class Sendec_block(nn.Module):
 
 	def __init__(self, ch_in, ch_out):
 
 		super(Sendec_block,self).__init__()
-		self.conv3d_1 = Conv_block_3d(ch_in, 32, batch_norm=False, activation=nn.ReLU(),
+		self.conv3d_1 = conv_block_3d(ch_in, 32, batch_norm=False, activation=nn.ReLU(),
 									  kernel_size=(1, 3, 3), stride=(1, 2, 2), padding=(0, 1, 1))
 		self.conv3d_tranpose = nn.ConvTranspose3d(32, 16, kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=(1, 1, 1))
 		ch_in = ch_in + 16
 		self.bn = nn.BatchNorm3d(ch_in)
 
-		self.conv3d_2 = Conv_block_3d(ch_in, ch_out, batch_norm=False, activation=nn.ReLU(), kernel_size=(1, 3, 3),
+		self.conv3d_2 = conv_block_3d(ch_in, ch_out, batch_norm=False, activation=nn.ReLU(), kernel_size=(1, 3, 3),
 									  stride=(1, 1, 1), padding=(0, 1, 1))
 
 	def forward(self, inp):
@@ -52,50 +34,6 @@ class Sendec_block(nn.Module):
 		x = self.bn(x)
 		x = self.conv3d_2(x)
 		return x1, x
-
-
-class ConvLSTMBlock(nn.Module):
-
-	def __init__(self, in_channels, num_features, kernel_size=3, padding=1, stride=1):
-		super().__init__()
-		self.num_features = num_features
-		self.conv = self._make_layer(in_channels+num_features, num_features*4,
-									   kernel_size, padding, stride)
-
-	def _make_layer(self, in_channels, out_channels, kernel_size, padding, stride):
-		return nn.Sequential(
-			nn.Conv2d(in_channels, out_channels,
-					  kernel_size=kernel_size, padding=padding, stride=stride, bias=False),
-			nn.BatchNorm2d(out_channels),
-			nn.ReLU())
-
-	def forward(self, inputs):
-		'''
-		:param inputs: (B, C, S, H, W)
-		:param hidden_state: (hx: (B, S, C, H, W), cx: (B, S, C, H, W))
-		:return:
-		'''
-		outputs = []
-		B, C, S, H, W = inputs.shape
-		inputs = inputs.permute(0, 2, 1, 3, 4)  # (b, c, s, h, w) -> (b, s, c, h, w)
-		hx = torch.zeros(B, self.num_features, H, W).to(inputs.device)
-		cx = torch.zeros(B, self.num_features, H, W).to(inputs.device)
-		for t in range(S):
-			combined = torch.cat([inputs[:, t], # (B, C, H, W)
-								  hx], dim=1)
-			gates = self.conv(combined)
-			ingate, forgetgate, cellgate, outgate = torch.split(gates, self.num_features, dim=1)
-			ingate = torch.sigmoid(ingate)
-			forgetgate = torch.sigmoid(forgetgate)
-			outgate = torch.sigmoid(outgate)
-
-			cy = (forgetgate * cx) + (ingate * cellgate)
-			hy = outgate * torch.tanh(cy)
-			outputs.append(hy)
-			hx = hy
-			cx = cy
-
-		return torch.stack(outputs).permute(1, 2, 0, 3, 4).contiguous() # (S, B, C, H, W) -> (B, C, S, H, W)
 
 
 class SEnDec_cnn_lstm(nn.Module):
@@ -116,30 +54,30 @@ class SEnDec_cnn_lstm(nn.Module):
 		super(SEnDec_cnn_lstm, self).__init__()
 
 
-		self.seq0 = Conv_block_3d(inp_ch, ch_out=16, batch_norm=True, activation=nn.ReLU(),
+		self.seq0 = conv_block_3d(inp_ch, ch_out=16, batch_norm=True, activation=nn.ReLU(),
 							 kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1))
 
 		# - SEnDec block 1
 		self.seq1 = Sendec_block(16, ch_out=16)
 
-		self.seq13 = Conv_block_3d(16, ch_out=32, batch_norm=True, activation=nn.ReLU(),
+		self.seq13 = conv_block_3d(16, ch_out=32, batch_norm=True, activation=nn.ReLU(),
 							 kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=(1, 1, 1))
 
 		# - SEnDec block 2
 		self.seq2 = Sendec_block(32, ch_out=16)
 
-		self.seq22_conv = Conv_block_3d(16, ch_out=32, batch_norm=True, activation=nn.ReLU(),
+		self.seq22_conv = conv_block_3d(16, ch_out=32, batch_norm=True, activation=nn.ReLU(),
 							 kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=(1, 1, 1))
 
 		# - SEnDec block 3
 		self.seq3 = Sendec_block(32, ch_out=16)
 
-		self.seq3_conv = Conv_block_3d(16, ch_out=32, batch_norm=True, activation=nn.ReLU(),
+		self.seq3_conv = conv_block_3d(16, ch_out=32, batch_norm=True, activation=nn.ReLU(),
 							 kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=(1, 1, 1))
 
 		self.seq4 = ConvLSTMBlock(32, 16, kernel_size=3, padding=1)
 
-		self.seq5 = Conv_block_3d(16, ch_out=16, batch_norm=True, activation=nn.ReLU(),
+		self.seq5 = conv_block_3d(16, ch_out=16, batch_norm=True, activation=nn.ReLU(),
 							 kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=(1, 1, 1))
 
 		#-~~~~~~~~~~~~~~~~~~ Upsampling ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -147,30 +85,30 @@ class SEnDec_cnn_lstm(nn.Module):
 		self.seq6_transpose = nn.ConvTranspose3d(16, 16, kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=(1, 1, 1))
 
 		ch_in = 32 + 16
-		self.seq6_conv = Conv_block_3d(ch_in, ch_out=32, batch_norm=True, activation=nn.ReLU(),
+		self.seq6_conv = conv_block_3d(ch_in, ch_out=32, batch_norm=True, activation=nn.ReLU(),
 							 kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1))
 
 		self.seq7_transpose = nn.ConvTranspose3d(32, 16, kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=(1, 1, 1))
 
 		ch_in = 32 + 16
-		self.seq7_conv = Conv_block_3d(ch_in, ch_out=32, batch_norm=True, activation=nn.ReLU(),
+		self.seq7_conv = conv_block_3d(ch_in, ch_out=32, batch_norm=True, activation=nn.ReLU(),
 							 kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1))
 
 		self.seq8_transpose = nn.ConvTranspose3d(32, 16, kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=(1, 1, 1))
 
 		ch_in = 32 + 16
-		self.seq8_conv = Conv_block_3d(ch_in, ch_out=32, batch_norm=True, activation=nn.ReLU(),
+		self.seq8_conv = conv_block_3d(ch_in, ch_out=32, batch_norm=True, activation=nn.ReLU(),
 							 kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1))
 
 		self.seq9_transpose = nn.ConvTranspose3d(32, 16, kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=(1, 1, 1))
 
 		ch_in = 16 + 16
-		self.seq9_conv = Conv_block_3d(ch_in, ch_out=32, batch_norm=True, activation=nn.ReLU(),
+		self.seq9_conv = conv_block_3d(ch_in, ch_out=32, batch_norm=True, activation=nn.ReLU(),
 							 kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1))
 
 		self.seq10 = ConvLSTMBlock(32, 16, kernel_size=3, padding=1)
 
-		self.out = Conv_block_3d(16, ch_out=1, batch_norm=False, activation=nn.Sigmoid(),
+		self.out = conv_block_3d(16, ch_out=1, batch_norm=False, activation=nn.Sigmoid(),
 							 kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1))
 
 	def forward(self, inp):

@@ -1,10 +1,10 @@
-from torch.nn import Module, Sequential
-from torch.nn import Conv3d, ConvTranspose3d, BatchNorm3d, MaxPool3d, AvgPool1d, Dropout3d
-from torch.nn import ReLU, Sigmoid
 import torch.nn as nn
 import torch
 
-class UNet_3D(Module):
+from torch.nn import Conv3d, ConvTranspose3d, BatchNorm3d, MaxPool3d, AvgPool1d, Dropout3d
+from torch.nn import ReLU, Sigmoid
+
+class UNet_3D(nn.Module):
     # __                            __
     #  1|__   ________________   __|1
     #     2|__  ____________  __|2
@@ -96,19 +96,19 @@ class UNet_3D(Module):
         return seg
 
 
-class Conv3D_Block(Module):
+class Conv3D_Block(nn.Module):
 
     def __init__(self, inp_feat, out_feat, kernel=3, stride=1, padding=1, residual=None):
 
         super(Conv3D_Block, self).__init__()
 
-        self.conv1 = Sequential(
+        self.conv1 = nn.Sequential(
             Conv3d(inp_feat, out_feat, kernel_size=kernel,
                    stride=stride, padding=padding, bias=True),
             BatchNorm3d(out_feat),
             ReLU())
 
-        self.conv2 = Sequential(
+        self.conv2 = nn.Sequential(
             Conv3d(out_feat, out_feat, kernel_size=kernel,
                    stride=stride, padding=padding, bias=True),
             BatchNorm3d(out_feat),
@@ -129,12 +129,12 @@ class Conv3D_Block(Module):
             return self.conv2(self.conv1(x)) + self.residual_upsampler(res)
 
 
-class Deconv3D_Block(Module):
+class Deconv3D_Block(nn.Module):
 
     def __init__(self, inp_feat, out_feat, kernel=3, stride=2, padding=1):
         super(Deconv3D_Block, self).__init__()
 
-        self.deconv = Sequential(
+        self.deconv = nn.Sequential(
             ConvTranspose3d(inp_feat, out_feat, kernel_size=(kernel, kernel, kernel),
                             stride=(stride, stride, stride), padding=(padding, padding, padding),
                             output_padding=1, bias=True),
