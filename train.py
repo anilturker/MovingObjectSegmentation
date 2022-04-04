@@ -31,13 +31,14 @@ def print_debug(s):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='MOS-Net pyTorch')
-    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='3dfr',
+    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unetvgg16',
                         help='Which network to use. unetvgg16, unet_attention, unet3d, sparse_unet, '
                              '3dfr, R2AttU, SEnDec_cnn_lstm')
 
     parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network',
-                        default='no',
-                        help='Add which temporal network will use(avfeat, confeat, fpm, tdr). Otherwise use no')
+                        default='avfeat',
+                        help='Add which temporal network will use(avfeat, avfeat_full, '
+                             'confeat, fpm, tdr). Otherwise use no')
 
     # Input images
     parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
@@ -49,16 +50,16 @@ if __name__ == '__main__':
                         help='Use recent background frame as an input as well. 0 or 1')
     parser.add_argument('--seg_ch', metavar='Segmentation', dest='seg_ch', type=int, default=0,
                         help='Whether to use the FPM channel input or not. 0 or 1')
-    parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=0,
+    parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=1,
                         help='Whether to use the flux tensor input or not. 0 or 1')
-    parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=0,
+    parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=1,
                         help='Whether to use the current frame, 0 or 1')
     parser.add_argument('--patch_frame_size', metavar='Patch frame size', dest='patch_frame_size', type=int, default=0,
                         help='Whether to use the patch frame, last n th frame or not. 0, n: number of last frame')
 
 
     # Optimization
-    parser.add_argument('--lr', metavar='Learning Rate', dest='lr', type=float, default=1e-4,
+    parser.add_argument('--lr', metavar='Learning Rate', dest='lr', type=float, default=1e-3,
                         help='learning rate of the optimization')
     parser.add_argument('--weight_decay', metavar='weight_decay', dest='weight_decay', type=float, default=1e-2,
                         help='weight decay of the optimization')
@@ -67,9 +68,9 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', metavar='Minibatch size', dest='batch_size', type=int, default=1,
                         help='Number of samples per minibatch')
     parser.add_argument('--loss', metavar='Loss function to be used', dest='loss', type=str,
-                        default='jaccard',
+                        default='tversky-bce-loss',
                         help='Loss function to be used ce for cross-entropy, focal-loss, tversky-loss'
-                             'focal-tversky-loss or jaccard')
+                             'tversky-bce-loss, focal-tversky-loss or jaccard')
     parser.add_argument('--opt', metavar='Optimizer to be used', dest='opt', type=str, default='adam',
                         help='sgd, rmsprop or adam')
 
@@ -247,7 +248,7 @@ if __name__ == '__main__':
     elif network.startswith("sparse_unet"):
         model = FgNet(inp_ch=num_ch, temporal_network=temporal_network, temporal_length=temporal_length,
                          filter_size=temporal_kernel_size)
-    if network == "3dfr":
+    elif network == "3dfr":
         model = DFR(inp_ch=num_ch, kernel_size=3, skip=1, temporal_length=temporal_length,
                     filter_size=temporal_kernel_size)
     elif network.startswith('R2AttU'):
@@ -283,6 +284,8 @@ if __name__ == '__main__':
     elif loss == "focal-loss":
         loss_func = losses.binary_focal_loss
     elif loss == "tversky-loss":
+        loss_func = losses.tverskyLoss_loss
+    elif loss == "tversky-bce-loss":
         loss_func = losses.tverskyLoss_bce_loss
     elif loss == "focal-tversky-loss":
         loss_func = losses.focal_tversky_loss

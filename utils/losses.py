@@ -78,8 +78,8 @@ def tverskyLoss(true, pred, alpha=0.3, beta=0.7):
 def tverskyLoss_bce_loss(true, pred, bceWeight=0.5, alpha=0.3, beta=0.7):
     epsilon = 1e-7
 
-    bce = binary_cross_entropy_loss(pred, true)
-    tversky = tverskyLoss(pred, true, alpha, beta)
+    bce = binary_cross_entropy_loss(true, pred)
+    tversky = tverskyLoss(true, pred, alpha, beta)
 
     loss = bce * bceWeight + tversky * (1 - bceWeight) + epsilon
 

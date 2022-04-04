@@ -23,8 +23,11 @@ class unet_vgg16(nn.Module):
 
         if 'avfeat' in self.temporal_network:
             self.AvFeat = AvFeat(filter_size=filter_size)
-            self.AvShortFeat = AvShortFeat(filter_size=filter_size)
-            inp_ch = inp_ch + filter_size * 2
+            if "avfeat_full" in self.temporal_network:
+                self.AvShortFeat = AvShortFeat(filter_size=filter_size)
+                inp_ch = inp_ch + filter_size
+
+            inp_ch = inp_ch + filter_size
 
         if 'fpm' in self.temporal_network:
             self.FPM = M_FPM(filter_size=filter_size)
@@ -78,8 +81,10 @@ class unet_vgg16(nn.Module):
 
             if "avfeat" in self.temporal_network:
                 avfeat = self.AvFeat(temporal_patch)
-                avshortfeat = self.AvShortFeat(temporal_patch[:, :, -12:])
-                inp = torch.cat((inp, avfeat, avshortfeat), dim=1)
+                if "avfeat_full" in self.temporal_network:
+                    avshortfeat = self.AvShortFeat(temporal_patch[:, :, -12:])
+                    inp = torch.cat((inp, avshortfeat), dim=1)
+                inp = torch.cat((inp, avfeat), dim=1)
             if 'tdr' in self.temporal_network:
                 tdr = self.TDR(temporal_patch.squeeze(dim=1))
                 inp = torch.cat((inp, tdr), dim=1)
