@@ -44,6 +44,8 @@ if __name__ == '__main__':
     parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
                         help='Size of the inputs. If equals 0, use the original sized images. '
                              'Assumes square sized input')
+    parser.add_argument('--use_selected', metavar='Use selected frames', dest='use_selected', type=int, default=200,
+                        help='Number of selected frames to be used (None or 200)')
     parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='no',
                         help='Which empty background to use? no, manual or automatic')
     parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=0,
@@ -56,6 +58,13 @@ if __name__ == '__main__':
                         help='Whether to use the current frame, 0 or 1')
     parser.add_argument('--patch_frame_size', metavar='Patch frame size', dest='patch_frame_size', type=int, default=0,
                         help='Whether to use the patch frame, last n th frame or not. 0, n: number of last frame')
+
+
+    # Temporal network parameters
+    parser.add_argument('--temporal_history', metavar='Temporal History', dest='temporal_history', type=int,
+                        default=50, help='The number of historical frames')
+    parser.add_argument('--temporal_kernel_size', metavar='Temporal History', dest='temporal_kernel_size', type=int,
+                        default=8, help='Kernel size of temporal network')
 
 
     # Optimization
@@ -86,11 +95,6 @@ if __name__ == '__main__':
                         default=1,
                         help='Whether to use Data Augmentation for Illumination Difference. 0 or 1')
 
-    # Temporal network parameters
-    parser.add_argument('--temporal_history', metavar='Temporal History', dest='temporal_history', type=int,
-                        default=50, help='The number of historical frames')
-    parser.add_argument('--temporal_kernel_size', metavar='Temporal History', dest='temporal_kernel_size', type=int,
-                        default=8, help='Kernel size of temporal network')
 
     # Checkpoint
     parser.add_argument('--model_chk', metavar='Checkpoint for the model', dest='model_chk', type=int, default=1,
@@ -122,6 +126,7 @@ if __name__ == '__main__':
     loss = args.loss
     opt = args.opt
     inp_size = args.inp_size
+    use_selected = args.use_selected
     if inp_size == 0:
         inp_size = None
     else:
@@ -221,13 +226,13 @@ if __name__ == '__main__':
     dataloader_tr = CDNet2014Loader(
         dataset_tr, empty_bg=empty_bg, current_fr=current_fr, patch_frame_size=patch_frame_size,
         use_flux_tensor=use_flux_tensor, recent_bg=recent_bg,
-        use_temporal_network=use_temporal_network, temporal_length=temporal_length, use_selected=200,
+        use_temporal_network=use_temporal_network, temporal_length=temporal_length, use_selected=use_selected,
         segmentation_ch=seg_ch, transforms=transforms_tr, shuffle=True
     )
     dataloader_test = CDNet2014Loader(
         dataset_test, empty_bg=empty_bg, current_fr=current_fr, patch_frame_size=patch_frame_size,
         use_flux_tensor=use_flux_tensor, recent_bg=recent_bg,
-        use_temporal_network=use_temporal_network, temporal_length=temporal_length, use_selected=200,
+        use_temporal_network=use_temporal_network, temporal_length=temporal_length, use_selected=use_selected,
         segmentation_ch=seg_ch, transforms=transforms_test, shuffle=True
     )
 
@@ -284,7 +289,7 @@ if __name__ == '__main__':
     elif loss == "focal-loss":
         loss_func = losses.binary_focal_loss
     elif loss == "tversky-loss":
-        loss_func = losses.tverskyLoss_loss
+        loss_func = losses.tverskyLoss
     elif loss == "tversky-bce-loss":
         loss_func = losses.tverskyLoss_bce_loss
     elif loss == "focal-tversky-loss":

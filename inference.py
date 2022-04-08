@@ -5,6 +5,7 @@ import csv
 import configs.data_config as data_config
 import configs.full_cv_config as tr_test_config
 from models.unet import unet_vgg16
+from models.unet_3d import UNet_3D
 from models.sparse_unet import FgNet
 from models.unet_attention import AttU_Net, R2AttU_Net
 from models.convlstm_network import SEnDec_cnn_lstm
@@ -16,12 +17,15 @@ from utils.eval_utils import logVideos
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='BSUV-Net-2.0 pyTorch')
+    parser = argparse.ArgumentParser(description='MOS-Net pyTorch')
     parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unetvgg16',
-                        help='Which network to use. unetvgg16, unet_attention, sparse_unet, R2AttU, SEnDec_cnn_lstm')
+                        help='Which network to use. unetvgg16, unet_attention, unet3d, sparse_unet, '
+                             '3dfr, R2AttU, SEnDec_cnn_lstm')
 
-    parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network', default='avfeat_confeat_tdr',
-                        help='Which temporal network will use. no, avfeat, tdr, avfeat_confeat, avfeat_confeat_tdr, avfeat_tdr')
+    parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network',
+                        default='avfeat',
+                        help='Add which temporal network will use(avfeat, avfeat_full, '
+                             'confeat, fpm, tdr). Otherwise use no')
 
     # Input images
     parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
@@ -33,13 +37,12 @@ if __name__ == '__main__':
                         help='Use recent background frame as an input as well. 0 or 1')
     parser.add_argument('--seg_ch', metavar='Segmentation', dest='seg_ch', type=int, default=0,
                         help='Whether to use the FPM channel input or not. 0 or 1')
-    parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=0,
+    parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=1,
                         help='Whether to use the flux tensor input or not. 0 or 1')
-    parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=0,
+    parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=1,
                         help='Whether to use the current frame, 0 or 1')
     parser.add_argument('--patch_frame_size', metavar='Patch frame size', dest='patch_frame_size', type=int, default=0,
                         help='Whether to use the patch frame, last n th frame or not. 0, n: number of last frame')
-
 
     # Temporal network parameters
     parser.add_argument('--temporal_history', metavar='Temporal History', dest='temporal_history', type=int,
@@ -49,11 +52,11 @@ if __name__ == '__main__':
 
     # Cross-validation
     parser.add_argument('--set_number', metavar='Which training-test split to use from config file', dest='set_number',
-                        type=int, default=[6], help='Training and test videos will be selected based on the set number')
+                        type=int, default=[5], help='Training and test videos will be selected based on the set number')
 
     # Model name
     parser.add_argument('--model_name', metavar='Name of the model for log keeping', dest='model_name',
-                        type=str, default='BSUV-Net 2.0',
+                        type=str, default='MOS-Net',
                         help='Name of the model to be used in output csv and checkpoints')
 
     args = parser.parse_args()
@@ -81,7 +84,11 @@ if __name__ == '__main__':
     cuda = True
 
     # naming for log keeping
-    fname = args.model_name + "_network_" + network
+    fname = args.model_name + "_fusion_net_" + network + "_temporal_net_" + temporal_network + "_" \
+            + "inp_selection_" + str(1 * (empty_bg != "no")) + str(1 * recent_bg) + str(1 * seg_ch) \
+            + str(1 * use_flux_tensor) + str(1 * current_fr)
+
+    print(f"Model started: {fname}")
 
     save_dir = data_config.save_dir
     mdl_dir = os.path.join(save_dir, fname)
@@ -91,6 +98,7 @@ if __name__ == '__main__':
     num_inp = (1 * (empty_bg != "no")) + (1 * recent_bg) + 1 * current_fr + (1 * (patch_frame_size != 0))
     num_ch = num_inp * num_ch_per_inp + 1 * (use_flux_tensor == True)
 
+    # load model
     if network == "unetvgg16":
         model = unet_vgg16(inp_ch=num_ch, kernel_size=3, skip=1, temporal_network=temporal_network,
                            temporal_length=temporal_length, filter_size=temporal_kernel_size)
@@ -100,11 +108,16 @@ if __name__ == '__main__':
     elif network.startswith("sparse_unet"):
         model = FgNet(inp_ch=num_ch, temporal_network=temporal_network, temporal_length=temporal_length,
                          filter_size=temporal_kernel_size)
+    elif network == "3dfr":
+        model = DFR(inp_ch=num_ch, kernel_size=3, skip=1, temporal_length=temporal_length,
+                    filter_size=temporal_kernel_size)
     elif network.startswith('R2AttU'):
         model = R2AttU_Net(inp_ch=num_ch, temporal_network=temporal_network, temporal_length=temporal_length,
                          filter_size=temporal_kernel_size)
     elif network.startswith('SEnDec_cnn_lstm'):
-        model = SEnDec_cnn_lstm(inp_ch=num_ch, patch_frame_size=patch_frame_size)
+        model = SEnDec_cnn_lstm(inp_ch=1)  # inp_ch is 3 if rgb input else 1
+    elif network.startswith('unet3d'):
+        model = UNet_3D(inp_ch=1)  # inp_ch is 3 if rgb input else 1
 
     else:
         raise ValueError(f"network = {network} is not defined")
