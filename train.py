@@ -44,8 +44,8 @@ if __name__ == '__main__':
     parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
                         help='Size of the inputs. If equals 0, use the original sized images. '
                              'Assumes square sized input')
-    parser.add_argument('--use_selected', metavar='Use selected frames', dest='use_selected', type=int, default=200,
-                        help='Number of selected frames to be used (None or 200)')
+    parser.add_argument('--use_selected', metavar='Use selected frames', dest='use_selected', type=int, default=0,
+                        help='Number of selected frames to be used (0 or 200)')
     parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='no',
                         help='Which empty background to use? no, manual or automatic')
     parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=0,
@@ -232,7 +232,7 @@ if __name__ == '__main__':
     dataloader_test = CDNet2014Loader(
         dataset_test, empty_bg=empty_bg, current_fr=current_fr, patch_frame_size=patch_frame_size,
         use_flux_tensor=use_flux_tensor, recent_bg=recent_bg,
-        use_temporal_network=use_temporal_network, temporal_length=temporal_length, use_selected=use_selected,
+        use_temporal_network=use_temporal_network, temporal_length=temporal_length, use_selected=200,
         segmentation_ch=seg_ch, transforms=transforms_test, shuffle=True
     )
 
