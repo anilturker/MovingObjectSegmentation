@@ -6,6 +6,7 @@ import configs.data_config as data_config
 import configs.full_cv_config as tr_test_config
 from models.unet import unet_vgg16
 from models.unet_3d import UNet_3D
+from models.dfr_net import DFR
 from models.sparse_unet import FgNet
 from models.unet_attention import AttU_Net, R2AttU_Net
 from models.convlstm_network import SEnDec_cnn_lstm

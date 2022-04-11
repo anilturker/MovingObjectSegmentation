@@ -44,7 +44,7 @@ if __name__ == '__main__':
     parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
                         help='Size of the inputs. If equals 0, use the original sized images. '
                              'Assumes square sized input')
-    parser.add_argument('--use_selected', metavar='Use selected frames', dest='use_selected', type=int, default=0,
+    parser.add_argument('--use_selected', metavar='Use selected frames', dest='use_selected', type=int, default=200,
                         help='Number of selected frames to be used (0 or 200)')
     parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='no',
                         help='Which empty background to use? no, manual or automatic')
@@ -77,7 +77,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', metavar='Minibatch size', dest='batch_size', type=int, default=1,
                         help='Number of samples per minibatch')
     parser.add_argument('--loss', metavar='Loss function to be used', dest='loss', type=str,
-                        default='tversky-bce-loss',
+                        default='jaccard',
                         help='Loss function to be used ce for cross-entropy, focal-loss, tversky-loss'
                              'tversky-bce-loss, focal-tversky-loss or jaccard')
     parser.add_argument('--opt', metavar='Optimizer to be used', dest='opt', type=str, default='adam',
@@ -332,6 +332,7 @@ if __name__ == '__main__':
     for epoch in range(start_epoch, num_epochs):  # loop over the dataset multiple times
         for phase, tensorloader in [("Train", tensorloader_tr), ("Test", tensorloader_test)]:
             running_loss, running_acc, running_f = 0.0, 0.0, 0.0
+            tp, fp, fn = 0, 0, 0
             if phase == "Train":
                 optimizer.zero_grad()
             for i, data in enumerate(tensorloader):
@@ -374,28 +375,49 @@ if __name__ == '__main__':
                 running_acc += losses.acc(labels_1d, outputs_1d).item()
                 running_f += losses.f_score(labels_1d, outputs_1d).item()
 
+                tp += torch.sum(labels_1d * outputs_1d).item()
+                fp += torch.sum((1 - labels_1d) * outputs_1d).item()
+                fn += torch.sum(labels_1d * (1 - outputs_1d)).item()
+
                 del inputs, labels, outputs, labels_1d, outputs_1d
                 if (i + 1) % 100 == 0:  # print every 2000 mini-batches
-                    print("::%s::[%d, %5d] loss: %.3f, acc: %.3f, f_score: %.3f" %
+                    # Calculate the statistics
+                    prec = tp / (tp + fp) if tp + fp > 0 else float('nan')
+                    recall = tp / (tp + fn) if tp + fn > 0 else float('nan')
+                    f_score = 2 * (prec * recall) / (prec + recall) if prec + recall > 0 else float('nan')
+
+                    print("::%s::[%d, %5d] loss: %.3f, prec: %.3f, recall: %.3f, f_score: %.3f" %
                           (phase, epoch + 1, i + 1,
-                           running_loss / (i + 1), running_acc / (i + 1), running_f / (i + 1)))
+                           running_loss / (i + 1), prec, recall, running_f / (i + 1)))
 
             epoch_loss = running_loss / len(tensorloader)
             epoch_acc = running_acc / len(tensorloader)
             epoch_f = running_f / len(tensorloader)
 
+            # Calculate the statistics
+            prec = tp / (tp + fp) if tp + fp > 0 else float('nan')
+            recall = tp / (tp + fn) if tp + fn > 0 else float('nan')
+            f_score = 2 * (prec * recall) / (prec + recall) if prec + recall > 0 else float('nan')
+
+            """
             print("::%s:: Epoch %d loss: %.3f, acc: %.3f, f_score: %.3f, lr : %.6f, elapsed time: %s" \
                   % (phase, epoch + 1, epoch_loss, epoch_acc, epoch_f,  optimizer.param_groups[0]["lr"],
                      (time.time() - st)))
+            """
+
+            print("::%s:: Epoch %d loss: %.3f, prec: %.3f, recall: %.3f, f_score: %.3f, lr : %.6f, elapsed time: %s"\
+                  % (phase, epoch + 1, epoch_loss, prec, recall, f_score,  optimizer.param_groups[0]["lr"],
+                     (time.time() - st)))
 
             writer.add_scalar(f"{phase}/loss", epoch_loss, epoch)
-            writer.add_scalar(f"{phase}/acc", epoch_acc, epoch)
-            writer.add_scalar(f"{phase}/f", epoch_f, epoch)
+            writer.add_scalar(f"{phase}/prec", prec, epoch)
+            writer.add_scalar(f"{phase}/recall", recall, epoch)
+            writer.add_scalar(f"{phase}/f", f_score, epoch)
 
             if phase.startswith("Test"):
-                if epoch_f > best_f:
+                if f_score > best_f:
                     print("The model weights that gives best f1 score on the test data are saving")
-                    best_f = epoch_f
+                    best_f = f_score
                     torch.save(model, f"{mdl_dir}/model_best.mdl")
 
             # Learning rate scheduler
@@ -420,7 +442,8 @@ if __name__ == '__main__':
                                 'lr': lr, 'weight_decay': weight_decay, 'loss': args.loss,
                                 'temporal_length': temporal_length,
                                 'temporal_kernel_size': temporal_kernel_size, 'opt': opt, 'inp_size': inp_size},
-                               {'epoch_loss': epoch_loss, 'epoch_acc': epoch_acc, 'epoch_f': epoch_f})
+                               {'epoch_loss': epoch_loss, 'epoch_prec': prec, 'epoch_recall': recall,
+                                'epoch_f': f_score})
 
             st = time.time()
 
