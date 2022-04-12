@@ -351,8 +351,6 @@ if __name__ == '__main__':
                         inputs, labels = inputs.cuda(), labels.cuda()
                     outputs = model(inputs)
                     labels_1d, outputs_1d = losses.getValid(labels, outputs)
-                    if labels_1d.nelement() == 0 or outputs_1d.nelement() == 0:
-                        continue
                     loss = loss_func(labels_1d, outputs_1d)
                     loss.backward()
                     optimizer.step()
