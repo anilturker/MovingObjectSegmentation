@@ -41,7 +41,7 @@ if __name__ == '__main__':
                              'confeat, fpm, tdr). Otherwise use no')
 
     # Input images
-    parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
+    parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=0,
                         help='Size of the inputs. If equals 0, use the original sized images. '
                              'Assumes square sized input')
     parser.add_argument('--use_selected', metavar='Use selected frames', dest='use_selected', type=int, default=200,
@@ -90,7 +90,7 @@ if __name__ == '__main__':
                         default=1,
                         help='Whether to use randomly-shifted crop. 0 or 1')
     parser.add_argument('--aug_ptz', metavar='Data Augmentation for PTZ camera crop', dest='aug_ptz', type=int,
-                        default=1, help='Whether to use PTZ camera crop 0 or 1')
+                        default=0, help='Whether to use PTZ camera crop 0 or 1')
     parser.add_argument('--aug_id', metavar='Data Augmentation for Illumination Difference', dest='aug_id', type=int,
                         default=1,
                         help='Whether to use Data Augmentation for Illumination Difference. 0 or 1')
@@ -172,9 +172,11 @@ if __name__ == '__main__':
         os.makedirs(mdl_dir)
 
     # Augmentations
-    crop_and_aug = [aug.RandomCrop(inp_size)]
+    crop_and_aug = []
+    if inp_size is not None:
+        crop_and_aug = [aug.RandomCrop(inp_size)]
 
-    if aug_rsc:
+    if aug_rsc and inp_size is not None:
         crop_and_aug.append(aug.RandomJitteredCrop(inp_size))
 
     if aug_ptz > 0:
@@ -215,7 +217,6 @@ if __name__ == '__main__':
     ]
 
     transforms_test = [
-        [aug.CenterCrop(inp_size)],
         [aug.ToTensor()],
         [aug.NormalizeTensor(mean_rgb=mean_rgb, std_rgb=std_rgb,
                              mean_seg=mean_seg, std_seg=std_seg, segmentation_ch=seg_ch,
