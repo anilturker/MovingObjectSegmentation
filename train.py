@@ -385,7 +385,7 @@ if __name__ == '__main__':
 
                     print("::%s::[%d, %5d] loss: %.3f, prec: %.3f, recall: %.3f, f_score: %.3f" %
                           (phase, epoch + 1, i + 1,
-                           running_loss / (i + 1), prec, recall, f_score / (i + 1)))
+                           running_loss / (i + 1), prec, recall, f_score))
 
             epoch_loss = running_loss / len(tensorloader)
 
