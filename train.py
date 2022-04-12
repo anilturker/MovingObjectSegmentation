@@ -371,8 +371,6 @@ if __name__ == '__main__':
 
                 # print statistics
                 running_loss += loss.item()
-                running_acc += losses.acc(labels_1d, outputs_1d).item()
-                running_f += losses.f_score(labels_1d, outputs_1d).item()
 
                 tp += torch.sum(labels_1d * outputs_1d).item()
                 fp += torch.sum((1 - labels_1d) * outputs_1d).item()
@@ -387,7 +385,7 @@ if __name__ == '__main__':
 
                     print("::%s::[%d, %5d] loss: %.3f, prec: %.3f, recall: %.3f, f_score: %.3f" %
                           (phase, epoch + 1, i + 1,
-                           running_loss / (i + 1), prec, recall, running_f / (i + 1)))
+                           running_loss / (i + 1), prec, recall, f_score / (i + 1)))
 
             epoch_loss = running_loss / len(tensorloader)
 
