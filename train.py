@@ -390,19 +390,11 @@ if __name__ == '__main__':
                            running_loss / (i + 1), prec, recall, running_f / (i + 1)))
 
             epoch_loss = running_loss / len(tensorloader)
-            epoch_acc = running_acc / len(tensorloader)
-            epoch_f = running_f / len(tensorloader)
 
             # Calculate the statistics
             prec = tp / (tp + fp) if tp + fp > 0 else float('nan')
             recall = tp / (tp + fn) if tp + fn > 0 else float('nan')
             f_score = 2 * (prec * recall) / (prec + recall) if prec + recall > 0 else float('nan')
-
-            """
-            print("::%s:: Epoch %d loss: %.3f, acc: %.3f, f_score: %.3f, lr : %.6f, elapsed time: %s" \
-                  % (phase, epoch + 1, epoch_loss, epoch_acc, epoch_f,  optimizer.param_groups[0]["lr"],
-                     (time.time() - st)))
-            """
 
             print("::%s:: Epoch %d loss: %.3f, prec: %.3f, recall: %.3f, f_score: %.3f, lr : %.6f, elapsed time: %s"\
                   % (phase, epoch + 1, epoch_loss, prec, recall, f_score,  optimizer.param_groups[0]["lr"],
