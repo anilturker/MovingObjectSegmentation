@@ -241,7 +241,7 @@ if __name__ == '__main__':
         dataset=dataloader_tr, batch_size=batch_size, shuffle=True, num_workers=1
     )
     tensorloader_test = torch.utils.data.DataLoader(
-        dataset=dataloader_test, batch_size=batch_size, shuffle=True, num_workers=1
+        dataset=dataloader_test, batch_size=1, shuffle=True, num_workers=1
     )
 
     # load model
