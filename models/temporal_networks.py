@@ -232,30 +232,20 @@ class AvShortFeat(nn.Module):
     def __init__(self, filter_size):
         super().__init__()
 
-        self.conv3D11 = conv_block_3d(1, 64, kernel_size=(6, 3, 3), stride=(1, 1, 1),
+        self.conv3D11 = conv_block_3d(1, 64, kernel_size=(3, 3, 3), stride=(1, 1, 1),
                                       dilation=(1, 1, 1), padding=(0, 1, 1))
-        self.conv3D12 = conv_block_3d(1, 64, kernel_size=(6, 3, 3), stride=(1, 1, 1),
+        self.conv3D12 = conv_block_3d(1, 64, kernel_size=(3, 3, 3), stride=(1, 1, 1),
                                       dilation=(1, 1, 1), padding=(0, 1, 1))
-        self.conv3D13 = conv_block_3d(1, 64, kernel_size=(6, 3, 3), stride=(1, 1, 1),
+        self.conv3D13 = conv_block_3d(1, 64, kernel_size=(3, 3, 3), stride=(1, 1, 1),
                                       dilation=(1, 1, 1), padding=(0, 1, 1))
 
-        self.conv3D14 = conv_block_3d(64, 128, kernel_size=(2, 3, 3), stride=(1, 1, 1),
-                                      dilation=(1, 2, 2), padding=(0, 2, 2))
-        self.conv3D15 = conv_block_3d(64, 128, kernel_size=(2, 3, 3), stride=(1, 1, 1),
-                                      dilation=(1, 2, 2), padding=(0, 2, 2))
+        self.conv3D14 = conv_block_3d(64, 128, kernel_size=(3, 3, 3), stride=(3, 1, 1),
+                                      dilation=(1, 2, 2), padding=(0, 1, 1))
+        self.conv3D15 = conv_block_3d(64, 128, kernel_size=(3, 3, 3), stride=(3, 1, 1),
+                                      dilation=(1, 2, 2), padding=(0, 1, 1))
 
-        self.conv3D16 = conv_block_3d(128, 256, kernel_size=(2, 3, 3), stride=(1, 1, 1),
-                                      dilation=(1, 4, 4), padding=(0, 4, 4))
-
-        self.conv3D21 = conv_block_3d(1, 64, kernel_size=(3, 3, 3), stride=(1, 1, 1),
-                                      dilation=(4, 1, 1), padding=(0, 1, 1))
-        self.conv3D22 = conv_block_3d(64, 128, kernel_size=(2, 3, 3), stride=(1, 1, 1),
-                                      dilation=(2, 2, 2), padding=(0, 2, 2))
-        self.conv3D23 = conv_block_3d(128, 256, kernel_size=(2, 3, 3), stride=(1, 1, 1),
-                                      dilation=(1, 4, 4), padding=(0, 4, 4))
-
-        self.conv3D31 = conv_block_3d(256, 256, kernel_size=(2, 3, 3), stride=(1, 1, 1),
-                                      dilation=(1, 1, 1), padding=(0, 1, 1))
+        self.conv3D16 = conv_block_3d(128, 256, kernel_size=(3, 3, 3), stride=(3, 1, 1),
+                                      dilation=(1, 4, 4), padding=(0, 1, 1))
 
         # Temporal depth 10
         self.conv2d_1 = conv_block(256, 128, maxpool=False, kernel_size=(3, 3), stride=1, padding=1)
@@ -280,16 +270,9 @@ class AvShortFeat(nn.Module):
         fused_2 = torch.cat((x1_4, x1_5), dim=2)
         x1_6 = self.conv3D16(fused_2)
 
-        x2_1 = self.conv3D21(inp)
-        x2_2 = self.conv3D22(x2_1)
-        x2_3 = self.conv3D23(x2_2)
+        x_2d = x1_6.squeeze(dim=2)
 
-        fused_3 = torch.cat((x1_6, x2_3), dim=2)
-        x_3 = self.conv3D31(fused_3)
-
-        x_3 = x_3.squeeze(dim=2)
-
-        x = self.conv2d_1(x_3)
+        x = self.conv2d_1(x_2d)
         x = self.conv2d_2(x)
         x = self.conv2d_3(x)
 

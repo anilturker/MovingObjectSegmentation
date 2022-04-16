@@ -425,7 +425,7 @@ class NormalizeTensor:
         segmentation_ch(bool): Bool for the usage of segmentation channel
     """
     def __init__(self, mean_rgb, mean_seg, std_rgb, std_seg, segmentation_ch=False,
-                 recent_bg=False, empty_bg=False, current_fr=False, patch_frame_size=0):
+                 recent_bg=False, empty_bg=False, current_fr=False, flux_ch=False, patch_frame_size=0):
         self.mean_rgb = mean_rgb
         self.std_rgb = std_rgb
         self.mean_seg = mean_seg
@@ -434,6 +434,7 @@ class NormalizeTensor:
         self.recent_bg = recent_bg
         self.empty_bg = empty_bg
         self.current_fr = current_fr
+        self.flux_ch = flux_ch
         self.patch_frame_size = patch_frame_size
 
     def __call__(self, inp, out):
@@ -455,13 +456,13 @@ class NormalizeTensor:
 
         c, h, w = inp.shape
 
-        normalized_curr_frame = int(1*self.empty_bg + 1*self.recent_bg + 1*self.current_fr)
-        curr_frame_ch = normalized_curr_frame * 2 if self.segmentation_ch == True else 1
+        normalized_curr_frame_seg = int(1*self.empty_bg + 1*self.recent_bg)
+        curr_frame_ch_seg = normalized_curr_frame_seg * 2 if self.segmentation_ch == True else normalized_curr_frame_seg
 
-        mean_vec = np.concatenate([mean_period for _ in range(normalized_curr_frame)]
-                                 + [self.mean_rgb for _ in range(c - curr_frame_ch)])
-        std_vec = np.concatenate([std_period for _ in range(normalized_curr_frame)]
-                                 + [self.std_rgb for _ in range(c - curr_frame_ch)])
+        mean_vec = np.concatenate([mean_period for _ in range(normalized_curr_frame_seg + 1*self.flux_ch)]
+                                 + [self.mean_rgb for _ in range(c - curr_frame_ch_seg)])
+        std_vec = np.concatenate([std_period for _ in range(normalized_curr_frame_seg + 1*self.flux_ch)]
+                                 + [self.std_rgb for _ in range(c - curr_frame_ch_seg)])
 
         inp = tvtf.Normalize(mean_vec, std_vec)(inp)
 
