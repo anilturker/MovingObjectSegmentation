@@ -108,7 +108,7 @@ class CDNet2014Loader(data.Dataset):
         cat, vid, fr_id = self.input_tuples[item]
 
         # Construct the input
-        inp = {"current_fr":None, "current_fr_seg":None,
+        inp = {"current_fr_seg":None, "current_fr":None,
                "empty_bg_seg":None, "empty_bg":None,
                "recent_bg_seg":None, "recent_bg":None}
 

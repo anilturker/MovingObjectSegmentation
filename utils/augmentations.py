@@ -456,11 +456,12 @@ class NormalizeTensor:
         c, h, w = inp.shape
 
         normalized_curr_frame = int(1*self.empty_bg + 1*self.recent_bg + 1*self.current_fr)
+        curr_frame_ch = normalized_curr_frame * 2 if self.segmentation_ch == True else 1
 
         mean_vec = np.concatenate([mean_period for _ in range(normalized_curr_frame)]
-                                 + [self.mean_rgb for _ in range(c - normalized_curr_frame)])
+                                 + [self.mean_rgb for _ in range(c - curr_frame_ch)])
         std_vec = np.concatenate([std_period for _ in range(normalized_curr_frame)]
-                                 + [self.std_rgb for _ in range(c - normalized_curr_frame)])
+                                 + [self.std_rgb for _ in range(c - curr_frame_ch)])
 
         inp = tvtf.Normalize(mean_vec, std_vec)(inp)
 
