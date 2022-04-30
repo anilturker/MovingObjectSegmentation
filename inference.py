@@ -24,7 +24,7 @@ if __name__ == '__main__':
                              '3dfr, R2AttU, SEnDec_cnn_lstm')
 
     parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network',
-                        default='avfeat',
+                        default='no',
                         help='Add which temporal network will use(avfeat, avfeat_full, '
                              'confeat, fpm, tdr). Otherwise use no')
 
@@ -32,13 +32,13 @@ if __name__ == '__main__':
     parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
                         help='Size of the inputs. If equals 0, use the original sized images. '
                              'Assumes square sized input')
-    parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='no',
+    parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='manual',
                         help='Which empty background to use? no, manual or automatic')
-    parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=0,
+    parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=1,
                         help='Use recent background frame as an input as well. 0 or 1')
     parser.add_argument('--seg_ch', metavar='Segmentation', dest='seg_ch', type=int, default=0,
                         help='Whether to use the FPM channel input or not. 0 or 1')
-    parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=1,
+    parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=0,
                         help='Whether to use the flux tensor input or not. 0 or 1')
     parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=1,
                         help='Whether to use the current frame, 0 or 1')
@@ -175,8 +175,8 @@ if __name__ == '__main__':
             temporal_length=temporal_length,
             recent_bg=recent_bg,
             segmentation_ch=seg_ch,
-            save_vid=False,
-            use_selected=200,
+            save_vid=True,
+            use_selected=False,
             set_number=set_number,
             debug=False
         )
