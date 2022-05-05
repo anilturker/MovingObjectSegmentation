@@ -17,7 +17,7 @@ cuda = True
 def evalVideo(cat, vid, model, current_fr=False, empty_bg=False, use_flux_tensor=False,
               temporal_length=50, recent_bg=False, use_temporal_network=False, patch_frame_size=False,
               segmentation_ch=False, eps=1e-5, save_vid=False, save_outputs="", model_name="", debug=False,
-              use_selected=False, multiplier=16):
+              use_selected=False, shuffle=True, multiplier=16):
     """ Evalautes the trained model on all ROI frames of cat/vid
     Args:
         :cat (string):                  Category
@@ -40,7 +40,6 @@ def evalVideo(cat, vid, model, current_fr=False, empty_bg=False, use_flux_tensor
     std_seg = [x for x in [0.5]]
 
     transforms = [
-        [aug.Resize((240, 320))],
         [aug.ToTensor()],
         [aug.NormalizeTensor(mean_rgb=mean_rgb, std_rgb=std_rgb,
                              mean_seg=mean_seg, std_seg=std_seg, segmentation_ch=segmentation_ch,
@@ -49,7 +48,7 @@ def evalVideo(cat, vid, model, current_fr=False, empty_bg=False, use_flux_tensor
     ]
     dataloader = CDNet2014Loader({cat:[vid]}, empty_bg=empty_bg, current_fr=current_fr, use_flux_tensor=use_flux_tensor, recent_bg=recent_bg,
         use_temporal_network=use_temporal_network, temporal_length=temporal_length, use_selected=use_selected,
-        patch_frame_size=patch_frame_size, segmentation_ch=segmentation_ch, transforms=transforms, shuffle=True)
+        patch_frame_size=patch_frame_size, segmentation_ch=segmentation_ch, transforms=transforms, shuffle=shuffle)
 
     tensorloader = torch.utils.data.DataLoader(dataset=dataloader,
                                                batch_size=1,
@@ -64,9 +63,9 @@ def evalVideo(cat, vid, model, current_fr=False, empty_bg=False, use_flux_tensor
             model_name = model_name[:-9]
         if model_name.endswith("_autoBG"):
             model_name = model_name[:-7]
-        vid_path = os.path.join(data_config.save_dir, model_name, f"{cat}_{vid}.mp4")
+        vid_path = os.path.join(data_config.save_dir, model_name, f"{cat}_{vid}.avi")
         print(vid_path)
-        vid = cv2.VideoWriter(vid_path, cv2.VideoWriter_fourcc(*'MP4V'), 30, (3*w+20, h))
+        vid = cv2.VideoWriter(vid_path, cv2.VideoWriter_fourcc(*'XVID'), 25, (3*w+20, h))
 
     if save_outputs:
         output_path = os.path.join(data_config.save_dir, "outputs", save_outputs)
@@ -151,7 +150,7 @@ def evalVideo(cat, vid, model, current_fr=False, empty_bg=False, use_flux_tensor
 
 def logVideos(dataset, model, model_name, csv_path, empty_bg=False, current_fr=False, use_flux_tensor=False,
               patch_frame_size=False, use_temporal_network=False, use_selected=False, recent_bg=False, temporal_length=50,
-              segmentation_ch=False, eps=1e-5, save_vid=False, save_outputs="", set_number=0, debug=False):
+              segmentation_ch=False, eps=1e-5, save_vid=False, save_outputs="", shuffle=True, debug=False):
     """ Evaluate the videos given in dataset and log them to a csv file
     Args:
         :dataset (dict):                Dictionary of dataset. Keys are the categories (string),
@@ -165,7 +164,6 @@ def logVideos(dataset, model, model_name, csv_path, empty_bg=False, current_fr=F
         :segmentation_ch (boolean):     Boolean for using the segmentation maps
         :eps (float):                   A small multiplier for making the operations easier
         save_vid (boolean):             Boolean for saving the output as a video
-        :set_number (int):              Set number for csv_f_path
         :debug (boolean):               Use for quick debugging
     """
 
@@ -180,7 +178,7 @@ def logVideos(dataset, model, model_name, csv_path, empty_bg=False, current_fr=F
                                            patch_frame_size=patch_frame_size, temporal_length=temporal_length,
                                            recent_bg=recent_bg, segmentation_ch=segmentation_ch, eps=eps,
                                            save_vid=save_vid, save_outputs=save_outputs, model_name=model_name,
-                                           use_selected=use_selected, debug=debug)
+                                           use_selected=use_selected, shuffle=shuffle, debug=debug)
 
             new_row[csv_header2loc[vid]] = fnr
             new_row[csv_header2loc[vid]+1] = prec

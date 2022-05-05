@@ -29,9 +29,6 @@ if __name__ == '__main__':
                              'confeat, fpm, tdr). Otherwise use no')
 
     # Input images
-    parser.add_argument('--inp_size', metavar='Input Size', dest='inp_size', type=int, default=224,
-                        help='Size of the inputs. If equals 0, use the original sized images. '
-                             'Assumes square sized input')
     parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='manual',
                         help='Which empty background to use? no, manual or automatic')
     parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=1,
@@ -69,11 +66,6 @@ if __name__ == '__main__':
     use_flux_tensor = args.flux_ch
     recent_bg = True if args.recent_bg == 1 else False
     seg_ch = True if args.seg_ch == 1 else False
-    inp_size = args.inp_size
-    if inp_size == 0:
-        inp_size = None
-    else:
-        inp_size = (inp_size, inp_size)
 
     # Temporal network parameters
     temporal_length = args.temporal_history
@@ -177,7 +169,7 @@ if __name__ == '__main__':
             segmentation_ch=seg_ch,
             save_vid=True,
             use_selected=False,
-            set_number=set_number,
+            shuffle=False,
             debug=False
         )
 
