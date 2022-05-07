@@ -24,8 +24,8 @@ if __name__ == '__main__':
                              '3dfr, R2AttU, SEnDec_cnn_lstm')
 
     parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network',
-                        default='no',
-                        help='Add which temporal network will use(avfeat, avfeat_full, '
+                        default='avfeat',
+                        help='Add which temporal network will use(avfeat, avfeat_v2, avfeat_full, '
                              'confeat, fpm, tdr). Otherwise use no')
 
     # Input images

@@ -141,13 +141,6 @@ class CDNet2014Loader(data.Dataset):
             inp["current_fr"] = self.__readGray(data_config.current_fr_path\
                                 .format(cat=cat, vid=vid, fr_id=str(fr_id).zfill(6)))
 
-        if self.patch_frame_size:
-            for i, id in enumerate(range(fr_id - self.patch_frame_size + 1, fr_id + 1)):
-                temporal_frame = self.__readGray(data_config.current_fr_path\
-                                    .format(cat=cat, vid=vid, fr_id=str(id).zfill(6)))
-
-                inp["patch_frame_" + str(i)] = temporal_frame
-
         if self.segmentation_ch and self.recent_bg:
             inp["recent_bg_seg"] = self.__readGray(data_config.recent_bg_fpm_path\
                                        .format(cat=cat, vid=vid, fr_id=str(fr_id).zfill(6)))
@@ -167,19 +160,18 @@ class CDNet2014Loader(data.Dataset):
                                                  .format(cat=cat, vid=vid, fr_id=str(fr_id).zfill(6)))
 
         if self.patch_frame_size:
-            for i, id in enumerate(range(fr_id - self.patch_frame_size + 1, fr_id + 1)):
+            for i, id in enumerate(range(fr_id - self.patch_frame_size, fr_id)):
                 temporal_frame = self.__readGray(data_config.current_fr_path\
                                     .format(cat=cat, vid=vid, fr_id=str(id).zfill(6)))
 
-                inp["patch_frame_" + str(i)] = temporal_frame
-
+                inp["patch_frame_n-" + str(i+1)] = temporal_frame
 
         if self.use_temporal_network:
             for i, id in enumerate(range(fr_id-self.temporal_length+1, fr_id+1)):
                 temporal_frame = self.__readGray(data_config.current_fr_path\
                                 .format(cat=cat, vid=vid, fr_id=str(id).zfill(6)))
 
-                inp["temporal_patch_" + str(i)] = temporal_frame
+                inp["temporal_patch_n-" + str(i)] = temporal_frame
 
         # Apply transform and clipping
         for transform_arr in self.transforms:

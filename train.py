@@ -36,8 +36,8 @@ if __name__ == '__main__':
                              '3dfr, R2AttU, SEnDec_cnn_lstm')
 
     parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network',
-                        default='no',
-                        help='Add which temporal network will use(avfeat, avfeat_full, '
+                        default='avfeat_v2',
+                        help='Add which temporal network will use(avfeat, avfeat_v2, avfeat_full, '
                              'confeat, fpm, tdr). Otherwise use no')
 
     # Input images
@@ -48,16 +48,17 @@ if __name__ == '__main__':
                         help='Number of selected frames to be used (0 or 200)')
     parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='no',
                         help='Which empty background to use? no, manual or automatic')
-    parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=1,
+    parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=0,
                         help='Use recent background frame as an input as well. 0 or 1')
     parser.add_argument('--seg_ch', metavar='Segmentation', dest='seg_ch', type=int, default=0,
                         help='Whether to use the FPM channel input or not. 0 or 1')
-    parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=0,
+    parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=1,
                         help='Whether to use the flux tensor input or not. 0 or 1')
     parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=1,
                         help='Whether to use the current frame, 0 or 1')
-    parser.add_argument('--patch_frame_size', metavar='Patch frame size', dest='patch_frame_size', type=int, default=0,
-                        help='Whether to use the patch frame, last n th frame or not. 0, n: number of last frame')
+    parser.add_argument('--patch_frame_size', metavar='Patch frame size', dest='patch_frame_size', type=int, default=1,
+                        help='Whether to use the patch frame, last n th frame or not. 0, n: number of last frame'
+                             '(not included the current frame)')
 
 
     # Temporal network parameters
@@ -158,7 +159,7 @@ if __name__ == '__main__':
     # naming for log keeping
     fname = args.model_name + "_fusion_net_" + network + "_temporal_net_" + temporal_network + "_" \
             + "inp_selection_" + str(1 * (empty_bg != "no")) + str(1 * recent_bg) + str(1 * seg_ch) \
-            + str(1 * use_flux_tensor) + str(1 * current_fr)
+            + str(1 * use_flux_tensor) + str(1 * current_fr) + "_patch_last_frames_" + str(patch_frame_size)
 
     print(f"Model started: {fname}")
 

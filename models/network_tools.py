@@ -19,7 +19,7 @@ def weight_init(m):
 
 class conv_block_3d(nn.Module):
     def __init__(self, ch_in, ch_out, batch_norm=True, activation=nn.ReLU(), kernel_size=(3, 3, 3), stride=(1, 1, 1),
-                 dilation=(1,1,1), padding=(0, 0, 0)):
+                 padding=(0, 0, 0)):
         super(conv_block_3d,self).__init__()
         self.conv3d = nn.Sequential()
         self.conv3d.add_module("conv3d", nn.Conv3d(ch_in, ch_out, kernel_size=kernel_size, stride=stride,
