@@ -8,6 +8,7 @@ import torch.nn as nn
 from models.network_tools import UNetDown, UNetUp, ConvSig, FCNN
 from models.temporal_networks import AvFeat, TDR
 from models.network_tools import weight_init, conv_block, up_conv
+from models.temporal_networks import AvFeat, AvFeat_v2, AvFeat_v3, AvFeat_v4, TDR, ConFeat, AvShortFeat, M_FPM
 
 
 class Recurrent_block(nn.Module):
@@ -85,36 +86,56 @@ class AttU_Net(nn.Module):
         self.temporal_length = temporal_length
 
         if 'avfeat' in self.temporal_network:
-            self.AvFeat = AvFeat(filter_size=filter_size)
+            if 'avfeat_v2' in self.temporal_network:
+                self.AvFeat = AvFeat_v2(filter_size=filter_size)
+            elif 'avfeat_v3' in self.temporal_network:
+                self.AvFeat = AvFeat_v3(filter_size=filter_size)
+            elif 'avfeat_v4' in self.temporal_network:
+                self.AvFeat = AvFeat_v4(filter_size=filter_size)
+            else:
+                self.AvFeat = AvFeat(filter_size=filter_size)
+
+            if "avfeat_full" in self.temporal_network:
+                self.AvShortFeat = AvShortFeat(filter_size=filter_size)
+                inp_ch = inp_ch + filter_size
+
+            inp_ch = inp_ch + filter_size
+
+        if 'fpm' in self.temporal_network:
+            self.FPM = M_FPM(filter_size=filter_size)
+            inp_ch = inp_ch + filter_size
+
+        if 'confeat' in self.temporal_network:
+            self.ConFeat = ConFeat(filter_size=filter_size)
             inp_ch = inp_ch + filter_size
 
         if 'tdr' in self.temporal_network:
             self.TDR = TDR(inp_ch=temporal_length)
-            inp_ch = inp_ch + 1
+            inp_ch = inp_ch + filter_size
 
         self.Maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        self.Conv1 = conv_block(ch_in=inp_ch, ch_out=64)
-        self.Conv2 = conv_block(ch_in=64, ch_out=128)
-        self.Conv3 = conv_block(ch_in=128, ch_out=256)
-        self.Conv4 = conv_block(ch_in=256, ch_out=512)
-        self.Conv5 = conv_block(ch_in=512, ch_out=1024)
+        self.Conv1 = conv_block(ch_in=inp_ch, ch_out=64, padding=1)
+        self.Conv2 = conv_block(ch_in=64, ch_out=128, padding=1)
+        self.Conv3 = conv_block(ch_in=128, ch_out=256, padding=1)
+        self.Conv4 = conv_block(ch_in=256, ch_out=512, padding=1)
+        self.Conv5 = conv_block(ch_in=512, ch_out=1024, padding=1)
 
         self.Up5 = up_conv(ch_in=1024, ch_out=512)
         self.Att5 = Attention_block(F_g=512, F_l=512, F_int=256)
-        self.Up_conv5 = conv_block(ch_in=1024, ch_out=512)
+        self.Up_conv5 = conv_block(ch_in=1024, ch_out=512, padding=1)
 
         self.Up4 = up_conv(ch_in=512, ch_out=256)
         self.Att4 = Attention_block(F_g=256, F_l=256, F_int=128)
-        self.Up_conv4 = conv_block(ch_in=512, ch_out=256)
+        self.Up_conv4 = conv_block(ch_in=512, ch_out=256, padding=1)
 
         self.Up3 = up_conv(ch_in=256, ch_out=128)
         self.Att3 = Attention_block(F_g=128, F_l=128, F_int=64)
-        self.Up_conv3 = conv_block(ch_in=256, ch_out=128)
+        self.Up_conv3 = conv_block(ch_in=256, ch_out=128, padding=1)
 
         self.Up2 = up_conv(ch_in=128, ch_out=64)
         self.Att2 = Attention_block(F_g=64, F_l=64, F_int=32)
-        self.Up_conv2 = conv_block(ch_in=128, ch_out=64)
+        self.Up_conv2 = conv_block(ch_in=128, ch_out=64, padding=1)
 
         self.out = ConvSig(64)
 
@@ -133,18 +154,24 @@ class AttU_Net(nn.Module):
                                               dtype=torch.float).unsqueeze(dim=1)
                 curr_patch = torch.tensor(inp[:, :temporal_network_first_index], dtype=torch.float)
 
-            if self.temporal_network == 'avfeat':
-                temporal_network_res = self.AvFeat(temporal_patch)
-            elif self.temporal_network == 'tdr':
-                temporal_network_res = self.TDR(temporal_patch.squeeze(dim=1))
-            elif self.temporal_network == 'avfeat_tdr':
-                avfeat = self.AvFeat(temporal_patch)
-                tdr = self.TDR(temporal_patch.squeeze(dim=1))
-                temporal_network_res = torch.cat((avfeat, tdr), dim=1)
-            else:
-                raise ValueError(f"temporal network = {self.temporal_network} is not defined")
+            inp = curr_patch
 
-            inp = torch.cat((curr_patch, temporal_network_res), dim=1)
+            if "avfeat" in self.temporal_network:
+                avfeat = self.AvFeat(temporal_patch)
+                if "avfeat_full" in self.temporal_network:
+                    avshortfeat = self.AvShortFeat(temporal_patch[:, :, -12:])
+                    inp = torch.cat((inp, avshortfeat), dim=1)
+                inp = torch.cat((inp, avfeat), dim=1)
+
+            if 'tdr' in self.temporal_network:
+                tdr = self.TDR(temporal_patch.squeeze(dim=1))
+                inp = torch.cat((inp, tdr), dim=1)
+            if 'confeat' in self.temporal_network:
+                confeat = self.ConFeat(temporal_patch[:, :, -1, :, :].unsqueeze(dim=1))  # give current frame to network
+                inp = torch.cat((inp, confeat), dim=1)
+            if 'fpm' in self.temporal_network:
+                fpm = self.FPM(temporal_patch[:, :, -1, :, :])  # give current frame to network
+                inp = torch.cat((inp, fpm), dim=1)
 
         # encoding path
         x1 = self.Conv1(inp)

@@ -4,7 +4,7 @@
 import torch
 import torch.nn as nn
 from models.network_tools import UNetDown, UNetUp, ConvSig, weight_init
-from models.temporal_networks import AvFeat, AvFeat_v2, TDR, ConFeat, AvShortFeat, M_FPM
+from models.temporal_networks import AvFeat, AvFeat_v2, AvFeat_v3, AvFeat_v4, TDR, ConFeat, AvShortFeat, M_FPM
 
 class unet_vgg16(nn.Module):
     """
@@ -23,7 +23,11 @@ class unet_vgg16(nn.Module):
 
         if 'avfeat' in self.temporal_network:
             if 'avfeat_v2' in self.temporal_network:
-                self.AvFeat = AvFeat_v2(filter_size=filter_size, use_convlstm=True)
+                self.AvFeat = AvFeat_v2(filter_size=filter_size)
+            elif 'avfeat_v3' in self.temporal_network:
+                self.AvFeat = AvFeat_v3(filter_size=filter_size)
+            elif 'avfeat_v4' in self.temporal_network:
+                self.AvFeat = AvFeat_v4(filter_size=filter_size)
             else:
                 self.AvFeat = AvFeat(filter_size=filter_size)
 

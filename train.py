@@ -31,12 +31,12 @@ def print_debug(s):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='MOS-Net pyTorch')
-    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unetvgg16',
+    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unet_attention',
                         help='Which network to use. unetvgg16, unet_attention, unet3d, sparse_unet, '
                              '3dfr, R2AttU, SEnDec_cnn_lstm')
 
     parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network',
-                        default='avfeat_v2',
+                        default='avfeat_v4',
                         help='Add which temporal network will use(avfeat, avfeat_v2, avfeat_full, '
                              'confeat, fpm, tdr). Otherwise use no')
 
