@@ -72,6 +72,7 @@ class AvFeat_v2(nn.Module):
         self.conv3_3x3 = conv_block_3d(int(filter_size), int(filter_size), kernel_size=(3, 3, 3), stride=(2, 1, 1), padding=(1, 1, 1))
         self.conv3_1x1 = conv_block_3d(int(filter_size), int(filter_size), kernel_size=(3, 1, 1), stride=(2, 1, 1), padding=(1, 0, 0))
 
+        self.conv3_avg_1x1 = conv_block_3d(int(filter_size * 3), int(filter_size), kernel_size=1, stride=(1, 1, 1), padding=0)
         self.convlstm_block = ConvLSTMBlock(filter_size*3, filter_size, kernel_size=3, padding=1)
 
         # Apply weight initialization
