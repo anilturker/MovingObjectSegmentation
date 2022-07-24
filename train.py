@@ -31,12 +31,12 @@ def print_debug(s):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='MOS-Net pyTorch')
-    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unet_attention',
+    parser.add_argument('--network', metavar='Network', dest='network', type=str, default='unetvgg16',
                         help='Which network to use. unetvgg16, unet_attention, unet3d, sparse_unet, '
                              '3dfr, R2AttU, SEnDec_cnn_lstm')
 
     parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network',
-                        default='avfeat_v4',
+                        default='avfeat',
                         help='Add which temporal network will use(avfeat, avfeat_v2, avfeat_full, '
                              'confeat, fpm, tdr). Otherwise use no')
 
@@ -56,7 +56,7 @@ if __name__ == '__main__':
                         help='Whether to use the flux tensor input or not. 0 or 1')
     parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=1,
                         help='Whether to use the current frame, 0 or 1')
-    parser.add_argument('--patch_frame_size', metavar='Patch frame size', dest='patch_frame_size', type=int, default=1,
+    parser.add_argument('--patch_frame_size', metavar='Patch frame size', dest='patch_frame_size', type=int, default=0,
                         help='Whether to use the patch frame, last n th frame or not. 0, n: number of last frame'
                              '(not included the current frame)')
 
@@ -98,7 +98,7 @@ if __name__ == '__main__':
 
 
     # Checkpoint
-    parser.add_argument('--model_chk', metavar='Checkpoint for the model', dest='model_chk', type=int, default=0,
+    parser.add_argument('--model_chk', metavar='Checkpoint for the model', dest='model_chk', type=int, default=1,
                         help='Whether to use checkpoint, 0 or 1')
 
     # Cross-validation

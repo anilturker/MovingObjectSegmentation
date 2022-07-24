@@ -15,7 +15,7 @@ csv_header2loc = data_config.csv_header2loc
 cuda = True
 
 def evalVideo(cat, vid, model, current_fr=False, empty_bg=False, use_flux_tensor=False,
-              temporal_length=50, recent_bg=False, use_temporal_network=False, patch_frame_size=False,
+              temporal_length=50, threshold_value=0.5, recent_bg=False, use_temporal_network=False, patch_frame_size=False,
               segmentation_ch=False, eps=1e-5, save_vid=False, save_outputs="", model_name="", debug=False,
               use_selected=False, shuffle=True, multiplier=16):
     """ Evalautes the trained model on all ROI frames of cat/vid
@@ -102,6 +102,9 @@ def evalVideo(cat, vid, model, current_fr=False, empty_bg=False, use_flux_tensor
 
         input = zeropad(input)
         output = model(input)
+
+        # apply thresholding the get binary maps
+        output = (output > threshold_value) * 1
         
         output = output[:, :, :h, :w]
         label_1d, output_1d = getValid(label, output)
@@ -123,7 +126,6 @@ def evalVideo(cat, vid, model, current_fr=False, empty_bg=False, use_flux_tensor
 
         if save_outputs:
             output_np = output.cpu().detach().numpy()[0, 0, :, :]
-            output_np = (output_np > 0.5) * 1
             h, w = output_np.shape
             output_fr = np.ones((h, w, 3))
             for k in range(3):
@@ -150,7 +152,7 @@ def evalVideo(cat, vid, model, current_fr=False, empty_bg=False, use_flux_tensor
 
 def logVideos(dataset, model, model_name, csv_path, empty_bg=False, current_fr=False, use_flux_tensor=False,
               patch_frame_size=False, use_temporal_network=False, use_selected=False, recent_bg=False, temporal_length=50,
-              segmentation_ch=False, eps=1e-5, save_vid=False, save_outputs="", shuffle=True, debug=False):
+              threshold_value=0.5, segmentation_ch=False, eps=1e-5, save_vid=False, save_outputs="", shuffle=True, debug=False):
     """ Evaluate the videos given in dataset and log them to a csv file
     Args:
         :dataset (dict):                Dictionary of dataset. Keys are the categories (string),
@@ -163,7 +165,7 @@ def logVideos(dataset, model, model_name, csv_path, empty_bg=False, current_fr=F
         :recent_bg (boolean):           Boolean for using the recent background frame
         :segmentation_ch (boolean):     Boolean for using the segmentation maps
         :eps (float):                   A small multiplier for making the operations easier
-        save_vid (boolean):             Boolean for saving the output as a video
+        :save_vid (boolean):             Boolean for saving the output as a video
         :debug (boolean):               Use for quick debugging
     """
 

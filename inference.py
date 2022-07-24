@@ -29,18 +29,20 @@ if __name__ == '__main__':
                              'confeat, fpm, tdr). Otherwise use no')
 
     # Input images
-    parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='manual',
+    parser.add_argument('--empty_bg', metavar='Empty Background Frame', dest='empty_bg', type=str, default='no',
                         help='Which empty background to use? no, manual or automatic')
-    parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=1,
+    parser.add_argument('--recent_bg', metavar='Recent Background Frame', dest='recent_bg', type=int, default=0,
                         help='Use recent background frame as an input as well. 0 or 1')
     parser.add_argument('--seg_ch', metavar='Segmentation', dest='seg_ch', type=int, default=0,
                         help='Whether to use the FPM channel input or not. 0 or 1')
-    parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=0,
+    parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=1,
                         help='Whether to use the flux tensor input or not. 0 or 1')
     parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=1,
                         help='Whether to use the current frame, 0 or 1')
     parser.add_argument('--patch_frame_size', metavar='Patch frame size', dest='patch_frame_size', type=int, default=0,
                         help='Whether to use the patch frame, last n th frame or not. 0, n: number of last frame')
+    parser.add_argument('--threshold_value', metavar='Threshold Value', dest='threshold_value', type=float, default=0.5,
+                        help='threshold value for getting binary image from the probability map')
 
     # Temporal network parameters
     parser.add_argument('--temporal_history', metavar='Temporal History', dest='temporal_history', type=int,
@@ -63,6 +65,7 @@ if __name__ == '__main__':
     empty_bg = args.empty_bg
     current_fr = args.current_fr
     patch_frame_size = args.patch_frame_size
+    threshold_value = args.threshold_value
     use_flux_tensor = args.flux_ch
     recent_bg = True if args.recent_bg == 1 else False
     seg_ch = True if args.seg_ch == 1 else False
@@ -165,6 +168,7 @@ if __name__ == '__main__':
             use_flux_tensor=use_flux_tensor,
             use_temporal_network=use_temporal_network,
             temporal_length=temporal_length,
+            threshold_value=threshold_value,
             recent_bg=recent_bg,
             segmentation_ch=seg_ch,
             save_vid=True,
