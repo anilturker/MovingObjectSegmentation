@@ -73,7 +73,7 @@ datasets_tr = {
         'turbulence': ['turbulence1', 'turbulence2', 'turbulence3']
         },  # 3DFR-Paper train set
     6: {
-        'intermittentObjectMotion':['streetLight']
+        'baseline':['highway']
         }, # small dataset for quick debugging
 
 }
@@ -139,6 +139,6 @@ datasets_test = {
         'turbulence': ['turbulence0']
         }, # 3DFR-Paper test set
     6: {
-        'lowFramerate': ['port_0_17fps']
+        'baseline': ['pedestrians']
     },  # small dataset for quick debugging
 }

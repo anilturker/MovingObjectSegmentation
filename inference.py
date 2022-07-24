@@ -52,7 +52,7 @@ if __name__ == '__main__':
 
     # Cross-validation
     parser.add_argument('--set_number', metavar='Which training-test split to use from config file', dest='set_number',
-                        type=int, default=[5], help='Training and test videos will be selected based on the set number')
+                        type=int, default=[6], help='Training and test videos will be selected based on the set number')
 
     # Model name
     parser.add_argument('--model_name', metavar='Name of the model for log keeping', dest='model_name',
@@ -144,9 +144,9 @@ if __name__ == '__main__':
             scene_row[csv_header2loc[vid] + 1] = vid
             scene_row[csv_header2loc[vid] + 2] = vid
 
-            metric_row[csv_header2loc[vid]] = 'FNR'
+            metric_row[csv_header2loc[vid]] = 'Recall'
             metric_row[csv_header2loc[vid] + 1] = 'Prec'
-            metric_row[csv_header2loc[vid] + 2] = 'F-score'
+            metric_row[csv_header2loc[vid] + 2] = 'F1-score'
 
     with open(csv_path, mode='w', newline="") as log_file:
         employee_writer = csv.writer(log_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)

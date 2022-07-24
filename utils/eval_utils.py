@@ -148,7 +148,7 @@ def evalVideo(cat, vid, model, current_fr=False, empty_bg=False, use_flux_tensor
     if save_vid:
         vid.release()
 
-    return 1-recall, prec, f_score
+    return recall, prec, f_score
 
 def logVideos(dataset, model, model_name, csv_path, empty_bg=False, current_fr=False, use_flux_tensor=False,
               patch_frame_size=False, use_temporal_network=False, use_selected=False, recent_bg=False, temporal_length=50,
@@ -175,14 +175,14 @@ def logVideos(dataset, model, model_name, csv_path, empty_bg=False, current_fr=F
     for cat, vids in dataset.items():
         for vid in vids:
             print(vid)
-            fnr, prec, f_score = evalVideo(cat, vid, model, current_fr=current_fr, empty_bg=empty_bg,
+            recall, prec, f_score = evalVideo(cat, vid, model, current_fr=current_fr, empty_bg=empty_bg,
                                            use_flux_tensor=use_flux_tensor, use_temporal_network=use_temporal_network,
                                            patch_frame_size=patch_frame_size, temporal_length=temporal_length,
                                            recent_bg=recent_bg, segmentation_ch=segmentation_ch, eps=eps,
                                            save_vid=save_vid, save_outputs=save_outputs, model_name=model_name,
                                            use_selected=use_selected, shuffle=shuffle, debug=debug)
 
-            new_row[csv_header2loc[vid]] = fnr
+            new_row[csv_header2loc[vid]] = recall
             new_row[csv_header2loc[vid]+1] = prec
             new_row[csv_header2loc[vid]+2] = f_score
 
