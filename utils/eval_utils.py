@@ -169,6 +169,11 @@ def logVideos(dataset, model, model_name, csv_path, empty_bg=False, current_fr=F
         :debug (boolean):               Use for quick debugging
     """
 
+    count = 0
+    total_recall = 0.0
+    total_prec = 0.0
+    total_f1_score = 0.0
+
     new_row = [0] * csv_header2loc['len']
     new_row[0] = model_name
 
@@ -186,6 +191,14 @@ def logVideos(dataset, model, model_name, csv_path, empty_bg=False, current_fr=F
             new_row[csv_header2loc[vid]+1] = prec
             new_row[csv_header2loc[vid]+2] = f_score
 
+            total_recall = total_recall + recall
+            total_prec = total_prec + prec
+            total_f1_score = total_f1_score + f_score
+            count = count + 1
+
+    new_row.append(str(total_recall/count))
+    new_row.append(str(total_prec / count))
+    new_row.append(str(total_f1_score / count))
 
     with open(csv_path, mode='a', newline="") as log_file:
         employee_writer = csv.writer(log_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)

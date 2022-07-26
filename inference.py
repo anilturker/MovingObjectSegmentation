@@ -24,7 +24,7 @@ if __name__ == '__main__':
                              '3dfr, R2AttU, SEnDec_cnn_lstm')
 
     parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network',
-                        default='avfeat',
+                        default='no',
                         help='Add which temporal network will use(avfeat, avfeat_v2, avfeat_full, '
                              'confeat, fpm, tdr). Otherwise use no')
 
@@ -35,7 +35,7 @@ if __name__ == '__main__':
                         help='Use recent background frame as an input as well. 0 or 1')
     parser.add_argument('--seg_ch', metavar='Segmentation', dest='seg_ch', type=int, default=0,
                         help='Whether to use the FPM channel input or not. 0 or 1')
-    parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=1,
+    parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=0,
                         help='Whether to use the flux tensor input or not. 0 or 1')
     parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=1,
                         help='Whether to use the current frame, 0 or 1')
@@ -52,7 +52,7 @@ if __name__ == '__main__':
 
     # Cross-validation
     parser.add_argument('--set_number', metavar='Which training-test split to use from config file', dest='set_number',
-                        type=int, default=[6], help='Training and test videos will be selected based on the set number')
+                        nargs='+', type=int, default=[6], help='Training and test videos will be selected based on the set number')
 
     # Model name
     parser.add_argument('--model_name', metavar='Name of the model for log keeping', dest='model_name',
@@ -82,7 +82,7 @@ if __name__ == '__main__':
     # naming for log keeping
     fname = args.model_name + "_fusion_net_" + network + "_temporal_net_" + temporal_network + "_" \
             + "inp_selection_" + str(1 * (empty_bg != "no")) + str(1 * recent_bg) + str(1 * seg_ch) \
-            + str(1 * use_flux_tensor) + str(1 * current_fr)
+            + str(1 * use_flux_tensor) + str(1 * current_fr) + "_patch_last_frames_" + str(patch_frame_size)
 
     print(f"Model started: {fname}")
 
@@ -148,6 +148,18 @@ if __name__ == '__main__':
             metric_row[csv_header2loc[vid] + 1] = 'Prec'
             metric_row[csv_header2loc[vid] + 2] = 'F1-score'
 
+    category_row.append('Average Score')
+    scene_row.append('-')
+    metric_row.append('Recall')
+
+    category_row.append('Average Score')
+    scene_row.append('-')
+    metric_row.append('Prec')
+
+    category_row.append('Average Score')
+    scene_row.append('-')
+    metric_row.append('score')
+
     with open(csv_path, mode='w', newline="") as log_file:
         employee_writer = csv.writer(log_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         employee_writer.writerow(category_row)
@@ -171,7 +183,7 @@ if __name__ == '__main__':
             threshold_value=threshold_value,
             recent_bg=recent_bg,
             segmentation_ch=seg_ch,
-            save_vid=True,
+            save_vid=False,
             use_selected=False,
             shuffle=False,
             debug=False
