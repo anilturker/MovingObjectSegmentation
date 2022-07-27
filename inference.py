@@ -158,7 +158,7 @@ if __name__ == '__main__':
 
     category_row.append('Average Score')
     scene_row.append('-')
-    metric_row.append('score')
+    metric_row.append('F1-score')
 
     with open(csv_path, mode='w', newline="") as log_file:
         employee_writer = csv.writer(log_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
