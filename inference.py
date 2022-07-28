@@ -24,7 +24,7 @@ if __name__ == '__main__':
                              '3dfr, R2AttU, SEnDec_cnn_lstm')
 
     parser.add_argument('--temporal_network', metavar='Temporal network', dest='temporal_network',
-                        default='no',
+                        default='avfeat',
                         help='Add which temporal network will use(avfeat, avfeat_v2, avfeat_full, '
                              'confeat, fpm, tdr). Otherwise use no')
 
@@ -35,7 +35,7 @@ if __name__ == '__main__':
                         help='Use recent background frame as an input as well. 0 or 1')
     parser.add_argument('--seg_ch', metavar='Segmentation', dest='seg_ch', type=int, default=0,
                         help='Whether to use the FPM channel input or not. 0 or 1')
-    parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=0,
+    parser.add_argument('--flux_ch', metavar='Flux tensor', dest='flux_ch', type=int, default=1,
                         help='Whether to use the flux tensor input or not. 0 or 1')
     parser.add_argument('--current_fr', metavar='Current Frame', dest='current_fr', type=int, default=1,
                         help='Whether to use the current frame, 0 or 1')
@@ -43,6 +43,10 @@ if __name__ == '__main__':
                         help='Whether to use the patch frame, last n th frame or not. 0, n: number of last frame')
     parser.add_argument('--threshold_value', metavar='Threshold Value', dest='threshold_value', type=float, default=0.5,
                         help='threshold value for getting binary image from the probability map')
+    parser.add_argument('--save_vid', metavar='Save output as video', dest='save_vid', type=bool, default=0,
+                        help='Whether to save the output or not')
+    parser.add_argument('--use_selected', metavar='Number of selected frames', dest='use_selected', type=int,
+                        default=None, help='Number of selected frames to be used (None or 200)')
 
     # Temporal network parameters
     parser.add_argument('--temporal_history', metavar='Temporal History', dest='temporal_history', type=int,
@@ -67,6 +71,8 @@ if __name__ == '__main__':
     patch_frame_size = args.patch_frame_size
     threshold_value = args.threshold_value
     use_flux_tensor = args.flux_ch
+    save_vid = args.save_vid
+    use_selected = args.use_selected
     recent_bg = True if args.recent_bg == 1 else False
     seg_ch = True if args.seg_ch == 1 else False
 
@@ -83,6 +89,7 @@ if __name__ == '__main__':
     fname = args.model_name + "_fusion_net_" + network + "_temporal_net_" + temporal_network + "_" \
             + "inp_selection_" + str(1 * (empty_bg != "no")) + str(1 * recent_bg) + str(1 * seg_ch) \
             + str(1 * use_flux_tensor) + str(1 * current_fr) + "_patch_last_frames_" + str(patch_frame_size)
+
 
     print(f"Model started: {fname}")
 
@@ -120,7 +127,7 @@ if __name__ == '__main__':
 
     # Evaluation on test videos
     model = torch.load(f"{mdl_dir}/model_best.mdl").cuda()
-    csv_path = "./" + fname + "_log.csv"
+    csv_path = "./" + fname + "_threshold_value_" + str(threshold_value) + "_log.csv"
 
     # Locations of each video in the CSV file
     csv_header2loc = data_config.csv_header2loc
@@ -183,8 +190,8 @@ if __name__ == '__main__':
             threshold_value=threshold_value,
             recent_bg=recent_bg,
             segmentation_ch=seg_ch,
-            save_vid=False,
-            use_selected=False,
+            save_vid=save_vid,
+            use_selected=use_selected,
             shuffle=False,
             debug=False
         )
